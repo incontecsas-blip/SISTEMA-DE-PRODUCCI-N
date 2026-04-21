@@ -119,11 +119,3 @@ export const ROLE_LABELS: Record<string, string> = {
   bodega:   'Bodega',
   operario: 'Operario',
 }
-
-export const ROLE_AVATAR_GRADIENT: Record<string, string> = {
-  master:   'from-amber-400 to-amber-600',
-  admin:    'from-sky-400 to-sky-700',
-  vendedor: 'from-emerald-400 to-emerald-700',
-  bodega:   'from-violet-400 to-violet-700',
-  operario: 'from-red-400 to-red-700',
-}
