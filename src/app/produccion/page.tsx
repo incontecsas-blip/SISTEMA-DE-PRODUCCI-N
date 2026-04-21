@@ -42,7 +42,7 @@ export default function ProduccionPage() {
     // Cargar parámetro de merma
     supabase.from('parametros_sistema').select('merma_aceptable_pct').single()
       .then(({ data }) => { if (data) setMermaParam(data.merma_aceptable_pct) })
-  }, [fetchOPs, supabase])
+  }, [supabase])
 
   async function iniciarOP(op: OrdenProduccion) {
     const { error } = await supabase
@@ -149,7 +149,12 @@ export default function ProduccionPage() {
     setSavingConsumos(true)
     try {
       // 1. Guardar consumos finales
-      await guardarConsumos()
+      for (const c of consumos) {
+        if (!c.id) continue
+        await supabase.from('op_consumos')
+          .update({ cantidad_real: c.cantidad_real })
+          .eq('id', c.id)
+      }
 
       // 2. Registrar movimientos SALIDA_OP por cada consumo
       for (const c of consumos) {
