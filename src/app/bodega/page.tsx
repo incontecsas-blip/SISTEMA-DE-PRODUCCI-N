@@ -60,15 +60,14 @@ export default function BodegaPage() {
     }))
 
     // Construir solicitudes con verificación de stock
-    const sols: SolicitudDespacho[] = (peds ?? []).map((p: {
-      id: string; numero_pedido: string
-      cliente: { nombre?: string } | null
-      lineas: { cantidad: number; producto: { nombre: string; id: string } | null; unidad: { simbolo: string } | null }[]
-    }) => ({
+    const sols: SolicitudDespacho[] = (peds ?? []).map((p: any) => ({
       pedido_id: p.id,
       numero_pedido: p.numero_pedido,
-      cliente: p.cliente?.nombre ?? '—',
-      lineas: (p.lineas ?? []).map(l => {
+      // Manejamos cliente como objeto o array según devuelva Supabase
+      cliente: Array.isArray(p.cliente) 
+        ? (p.cliente[0]?.nombre ?? '—') 
+        : (p.cliente?.nombre ?? '—'),
+      lineas: (p.lineas ?? []).map((l: any) => {
         const prod = prods?.find(pr => pr.id === l.producto?.id)
         return {
           producto: l.producto?.nombre ?? '—',
