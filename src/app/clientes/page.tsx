@@ -88,27 +88,40 @@ export default function ClientesPage() {
       return
     }
     setSaving(true)
+
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) { toast.error('Sesión expirada. Recarga la página.'); setSaving(false); return }
+
+    const { data: userProfile } = await supabase
+      .from('users').select('tenant_id').eq('id', authUser.id).single()
+
+    if (!userProfile?.tenant_id) {
+      toast.error('No se pudo obtener el tenant. Recarga la página.')
+      setSaving(false)
+      return
+    }
+
+    const payload = { ...form, tenant_id: userProfile.tenant_id, created_by: authUser.id }
+
     try {
       if (editing) {
-        const { error } = await supabase
-          .from('clientes')
-          .update({ ...form, created_by: user?.id })
-          .eq('id', editing.id)
-        if (error) throw error
+        const { error } = await supabase.from('clientes').update(payload).eq('id', editing.id)
+        if (error) { console.error('update error:', error); toast.error('Error: ' + error.message); return }
         toast.success('Cliente actualizado')
       } else {
-        const { error } = await supabase
-          .from('clientes')
-          .insert({ ...form, created_by: user?.id })
-        if (error) throw error
+        const { error } = await supabase.from('clientes').insert(payload)
+        if (error) {
+          console.error('insert error:', error)
+          toast.error(error.code === '23505' ? 'El RUC ya existe' : 'Error: ' + error.message)
+          return
+        }
         toast.success('Cliente creado')
       }
       setShowModal(false)
       fetchClientes()
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al guardar'
-      if (msg.includes('unique')) toast.error('El RUC ya existe para este tenant')
-      else toast.error(msg)
+      console.error('handleSave exception:', e)
+      toast.error('Error inesperado al guardar')
     } finally {
       setSaving(false)
     }
