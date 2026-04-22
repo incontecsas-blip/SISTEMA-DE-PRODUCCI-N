@@ -19,7 +19,7 @@ interface SolicitudDespacho {
 }
 
 export default function BodegaPage() {
-  const { user } = useAuth()
+  const { user, tenantId, userId } = useAuth()
   const supabase  = createClient()
 
   const [tab, setTab]               = useState<Tab>('solicitudes')
@@ -60,14 +60,15 @@ export default function BodegaPage() {
     }))
 
     // Construir solicitudes con verificación de stock
-    const sols: SolicitudDespacho[] = (peds ?? []).map((p: any) => ({
+    const sols: SolicitudDespacho[] = (peds ?? []).map((p: {
+      id: string; numero_pedido: string
+      cliente: { nombre?: string } | null
+      lineas: { cantidad: number; producto: { nombre: string; id: string } | null; unidad: { simbolo: string } | null }[]
+    }) => ({
       pedido_id: p.id,
       numero_pedido: p.numero_pedido,
-      // Manejamos cliente como objeto o array según devuelva Supabase
-      cliente: Array.isArray(p.cliente) 
-        ? (p.cliente[0]?.nombre ?? '—') 
-        : (p.cliente?.nombre ?? '—'),
-      lineas: (p.lineas ?? []).map((l: any) => {
+      cliente: p.cliente?.nombre ?? '—',
+      lineas: (p.lineas ?? []).map(l => {
         const prod = prods?.find(pr => pr.id === l.producto?.id)
         return {
           producto: l.producto?.nombre ?? '—',
@@ -98,9 +99,11 @@ export default function BodegaPage() {
     setSaving(true)
     try {
       // 1. Crear lote
+      if (!tenantId) { toast.error('Sesión expirada'); setSaving(false); return }
       const { data: lote, error: eLote } = await supabase
         .from('lotes')
         .insert({
+          tenant_id: tenantId,
           producto_id: formMP.producto_id,
           numero_lote: formMP.numero_lote,
           proveedor: formMP.proveedor,
@@ -117,13 +120,14 @@ export default function BodegaPage() {
       const { error: eMov } = await supabase
         .from('movimientos_inventario')
         .insert({
+          tenant_id: tenantId,
           producto_id: formMP.producto_id,
           lote_id: lote.id,
           tipo_movimiento: 'ENTRADA',
           cantidad: formMP.cantidad,
           referencia_tipo: 'ingreso_manual',
           notas: `Ingreso lote ${formMP.numero_lote}`,
-          created_by: user?.id,
+          created_by: userId,
         })
       if (eMov) throw eMov
 
