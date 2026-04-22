@@ -29,7 +29,7 @@ const ESTADO_ICONS: Record<OrderStatus, string> = {
 }
 
 export default function PedidosPage() {
-  const { user, role } = useAuth()
+  const { user, role, tenantId, userId } = useAuth()
   const supabase = createClient()
 
   const [pedidos, setPedidos]     = useState<Pedido[]>([])
@@ -138,11 +138,13 @@ export default function PedidosPage() {
     setSaving(true)
     try {
       const estado: OrderStatus = confirmar ? 'confirmado' : 'borrador'
+      if (!tenantId) { toast.error('Sesión expirada'); setSaving(false); return }
       const { data: pedido, error } = await supabase
         .from('pedidos')
         .insert({
+          tenant_id: tenantId,
           cliente_id: clienteSel.id,
-          vendedor_id: user?.id,
+          vendedor_id: userId,
           estado,
           fecha_entrega_solicitada: fechaEntrega,
           descuento_pct: clienteSel.descuento_pct,
