@@ -2,6 +2,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('')
@@ -15,29 +16,58 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
-        credentials: 'include',
-      })
+    const supabase = createClient()
 
-      const data = await res.json()
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
 
-      if (!res.ok) {
-        setError(data.error ?? 'Error al iniciar sesión')
-        setLoading(false)
-        return
-      }
-
-      // El servidor ya escribió la cookie — redirigir
-      window.location.href = '/dashboard'
-
-    } catch {
-      setError('Error de conexión. Intenta de nuevo.')
+    if (authError) {
+      setError(
+        authError.message.includes('Invalid login credentials')
+          ? 'Email o contraseña incorrectos'
+          : authError.message
+      )
       setLoading(false)
+      return
     }
+
+    if (!data.session || !data.user) {
+      setError('No se pudo establecer la sesión. Intenta de nuevo.')
+      setLoading(false)
+      return
+    }
+
+    // Verificar perfil
+    const { data: perfil, error: perfilError } = await supabase
+      .from('users')
+      .select('id, rol, activo')
+      .eq('id', data.user.id)
+      .maybeSingle()
+
+    if (perfilError) {
+      setError(`Error al cargar perfil: ${perfilError.message}`)
+      setLoading(false)
+      return
+    }
+
+    if (!perfil) {
+      setError('Tu usuario no tiene perfil en el sistema. Contacta al administrador.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    if (!perfil.activo) {
+      setError('Tu cuenta está desactivada.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    // Todo OK — ir al dashboard
+    window.location.href = '/dashboard'
   }
 
   return (
@@ -49,7 +79,6 @@ export default function LoginPage() {
           backgroundSize: '32px 32px',
         }}
       />
-
       <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
           <div
@@ -70,9 +99,7 @@ export default function LoginPage() {
         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl">
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                Email
-              </label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
@@ -84,15 +111,11 @@ export default function LoginPage() {
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg
                            text-white text-sm px-3 py-2.5 outline-none
                            placeholder:text-slate-600 disabled:opacity-50
-                           focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20
-                           transition-all"
+                           focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all"
               />
             </div>
-
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                Contraseña
-              </label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">Contraseña</label>
               <input
                 type="password"
                 value={password}
@@ -104,8 +127,7 @@ export default function LoginPage() {
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg
                            text-white text-sm px-3 py-2.5 outline-none
                            placeholder:text-slate-600 disabled:opacity-50
-                           focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20
-                           transition-all"
+                           focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all"
               />
             </div>
 
@@ -131,10 +153,7 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        <p className="text-center text-slate-600 text-xs mt-6">
-          Sistema de gestión industrial v1.0
-        </p>
+        <p className="text-center text-slate-600 text-xs mt-6">Sistema de gestión industrial v1.0</p>
       </div>
     </div>
   )
