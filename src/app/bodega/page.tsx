@@ -60,24 +60,37 @@ export default function BodegaPage() {
     }))
 
     // Construir solicitudes con verificación de stock
-    const sols: SolicitudDespacho[] = (peds ?? []).map((p: {
-      id: string; numero_pedido: string
-      cliente: { nombre?: string } | null
-      lineas: { cantidad: number; producto: { nombre: string; id: string } | null; unidad: { simbolo: string } | null }[]
-    }) => ({
-      pedido_id: p.id,
-      numero_pedido: p.numero_pedido,
-      cliente: p.cliente?.nombre ?? '—',
-      lineas: (p.lineas ?? []).map(l => {
-        const prod = prods?.find(pr => pr.id === l.producto?.id)
-        return {
-          producto: l.producto?.nombre ?? '—',
-          qty_teorica: l.cantidad,
-          unidad: l.unidad?.simbolo ?? 'kg',
-          stock_ok: (prod?.stock_actual ?? 0) >= l.cantidad,
-        }
-      }),
-    }))
+    type PedidoRaw = {
+      id: string
+      numero_pedido: string
+      cliente: { nombre?: string } | { nombre?: string }[] | null
+      lineas: {
+        cantidad: number
+        producto: { nombre: string; id: string } | { nombre: string; id: string }[] | null
+        unidad: { simbolo: string } | { simbolo: string }[] | null
+      }[]
+    }
+    const sols: SolicitudDespacho[] = ((peds ?? []) as unknown as PedidoRaw[]).map(p => {
+      const clienteNombre = Array.isArray(p.cliente)
+        ? p.cliente[0]?.nombre ?? '—'
+        : p.cliente?.nombre ?? '—'
+      return {
+        pedido_id: p.id,
+        numero_pedido: p.numero_pedido,
+        cliente: clienteNombre,
+        lineas: (p.lineas ?? []).map(l => {
+          const prodItem = Array.isArray(l.producto) ? l.producto[0] : l.producto
+          const unidItem = Array.isArray(l.unidad) ? l.unidad[0] : l.unidad
+          const prod = prods?.find(pr => pr.id === prodItem?.id)
+          return {
+            producto: prodItem?.nombre ?? '—',
+            qty_teorica: l.cantidad,
+            unidad: unidItem?.simbolo ?? 'kg',
+            stock_ok: (prod?.stock_actual ?? 0) >= l.cantidad,
+          }
+        }),
+      }
+    })
     setSolicitudes(sols)
     setLoading(false)
   }, [supabase])
