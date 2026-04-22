@@ -13,7 +13,7 @@ import toast from 'react-hot-toast'
 interface LineaForm { mp_id: string; cantidad: number; unidad_id: string; es_semielaborado: boolean }
 
 export default function FormulasPage() {
-  const { user } = useAuth()
+  const { user, tenantId, userId } = useAuth()
   const supabase  = createClient()
 
   const [formulas, setFormulas]   = useState<Formula[]>([])
@@ -66,15 +66,17 @@ export default function FormulasPage() {
     if (lineas.length === 0) { toast.error('Agrega al menos un ingrediente'); return }
     setSaving(true)
     try {
+      if (!tenantId) { toast.error('Sesión expirada'); setSaving(false); return }
       const { data: formula, error: ef } = await supabase
         .from('formulas')
         .insert({
+          tenant_id: tenantId,
           producto_id: formPT,
           activa: true,
           base_cantidad: formBase,
           base_unidad_id: formUnid || unidades[0]?.id,
           notas: formNotes,
-          created_by: user?.id,
+          created_by: userId,
         })
         .select().single()
       if (ef) throw ef
