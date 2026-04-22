@@ -42,7 +42,7 @@ interface RpcRequerimiento {
 }
 
 export default function ProduccionPage() {
-  const { user, role } = useAuth()
+  const { user, role, tenantId, userId } = useAuth()
   const supabase = createClient()
 
   const [ops, setOps]               = useState<OrdenProduccion[]>([])
@@ -188,6 +188,7 @@ export default function ProduccionPage() {
       // 2. Registrar movimientos SALIDA_OP
       for (const c of consumos) {
         await supabase.from('movimientos_inventario').insert({
+          tenant_id: tenantId,
           producto_id: c.mp_id,
           lote_id: c.lote_id,
           tipo_movimiento: 'SALIDA_OP',
@@ -195,7 +196,7 @@ export default function ProduccionPage() {
           referencia_tipo: 'orden_produccion',
           referencia_id: opActiva.id,
           notas: `OP ${opActiva.numero_op}`,
-          created_by: user?.id,
+          created_by: userId,
         })
       }
 
