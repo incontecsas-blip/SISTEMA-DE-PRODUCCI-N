@@ -1,52 +1,75 @@
 // src/app/auth/login/page.tsx
-// Página de login — autentica contra Supabase Auth
-
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import toast from 'react-hot-toast'
 
 export default function LoginPage() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
-  const router  = useRouter()
+  const [error, setError]       = useState('')
   const supabase = createClient()
 
   async function handleLogin(e: React.FormEvent) {
-  e.preventDefault()
-
-  try {
+    e.preventDefault()
     setLoading(true)
+    setError('')
 
-    console.log("ANTES DEL LOGIN")
+    try {
+      // 1. Autenticar
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
+      if (authError) {
+        setError(authError.message === 'Invalid login credentials'
+          ? 'Email o contraseña incorrectos'
+          : authError.message)
+        setLoading(false)
+        return
+      }
 
-    console.log("DESPUÉS DEL LOGIN")
-    console.log("DATA:", data)
-    console.log("ERROR:", error)
+      if (!authData.user) {
+        setError('No se pudo obtener el usuario')
+        setLoading(false)
+        return
+      }
 
-    if (error) throw error
+      // 2. Verificar que existe perfil en la tabla users
+      const { data: perfil, error: perfilError } = await supabase
+        .from('users')
+        .select('id, rol, activo, tenant_id')
+        .eq('id', authData.user.id)
+        .single()
 
-    toast.success('Sesión iniciada')
-    router.push('/dashboard')
+      if (perfilError || !perfil) {
+        setError('Tu usuario no tiene perfil en el sistema. Contacta al administrador.')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
 
-  } catch (err) {
-    console.error("ERROR LOGIN:", err)
-  } finally {
-    setLoading(false)
+      if (!perfil.activo) {
+        setError('Tu cuenta está desactivada. Contacta al administrador.')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+
+      // 3. Redirigir directamente — sin router, sin context, forzado
+      window.location.href = '/dashboard'
+
+    } catch (err) {
+      console.error('Error en login:', err)
+      setError('Error inesperado. Intenta de nuevo.')
+      setLoading(false)
+    }
   }
-}
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      {/* Background pattern */}
       <div
         className="absolute inset-0 opacity-5"
         style={{
@@ -56,11 +79,15 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-sm">
-        {/* Logo / título */}
+        {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-br from-sky-400 to-sky-700 rounded-2xl
-                          flex items-center justify-center text-3xl mx-auto mb-4
-                          shadow-lg shadow-sky-500/30">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4"
+            style={{
+              background: 'linear-gradient(135deg, #38bdf8, #0369a1)',
+              boxShadow: '0 4px 24px rgba(14,165,233,0.4)',
+            }}
+          >
             🏭
           </div>
           <h1 className="text-white font-extrabold text-2xl tracking-tight">
@@ -70,9 +97,9 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8
-                        shadow-2xl shadow-black/40">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl">
           <form onSubmit={handleLogin} className="space-y-5">
+
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1.5">
                 Email
@@ -82,6 +109,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 placeholder="tu@empresa.com"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg
                            text-white text-sm px-3 py-2.5 outline-none
@@ -100,6 +128,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg
                            text-white text-sm px-3 py-2.5 outline-none
@@ -109,15 +138,23 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* Error message */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+                <p className="text-red-400 text-xs font-medium">{error}</p>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-sky-500 hover:bg-sky-600 disabled:opacity-50
-                         text-white font-bold text-sm py-2.5 rounded-lg
-                         transition-all duration-150 mt-2"
+              className="w-full font-bold text-sm py-2.5 rounded-lg transition-all duration-150
+                         disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ background: loading ? '#0369a1' : '#0ea5e9', color: 'white' }}
             >
-              {loading ? 'Ingresando...' : 'Ingresar'}
+              {loading ? 'Verificando...' : 'Ingresar'}
             </button>
+
           </form>
         </div>
 
