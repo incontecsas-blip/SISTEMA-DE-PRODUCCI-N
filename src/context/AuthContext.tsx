@@ -16,6 +16,8 @@ interface AuthContextValue {
   user: User | null
   tenant: Tenant | null
   role: UserRole | null
+  tenantId: string | null      // ← acceso directo sin fetch extra
+  userId: string | null        // ← acceso directo al auth user id
   loading: boolean
   isMaster: boolean
   isAdmin: boolean
@@ -29,25 +31,37 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
   const [tenant, setTenant]   = useState<Tenant | null>(null)
+  const [userId, setUserId]   = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  const loadProfile = useCallback(async (uid: string) => {
+  const loadProfile = useCallback(async (authUserId: string) => {
+    setUserId(authUserId)
     try {
-      const { data: u } = await supabase
+      const { data: u, error: uErr } = await supabase
         .from('users')
         .select('*')
-        .eq('id', uid)
+        .eq('id', authUserId)
         .single()
 
-      if (u) {
-        setUser(u as User)
-        const { data: t } = await supabase
-          .from('tenants')
-          .select('*')
-          .eq('id', u.tenant_id)
-          .single()
-        if (t) setTenant(t as Tenant)
+      if (uErr || !u) {
+        console.error('Error loading user profile:', uErr?.message)
+        setLoading(false)
+        return
+      }
+
+      setUser(u as User)
+
+      const { data: t, error: tErr } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('id', u.tenant_id)
+        .single()
+
+      if (tErr || !t) {
+        console.error('Error loading tenant:', tErr?.message)
+      } else {
+        setTenant(t as Tenant)
       }
     } catch (e) {
       console.error('loadProfile error:', e)
@@ -72,18 +86,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setUser(null)
     setTenant(null)
+    setUserId(null)
     window.location.href = '/auth/login'
   }
 
   const role           = user?.rol ?? null
+  const tenantId       = user?.tenant_id ?? null
   const isMaster       = role === 'master'
   const isAdmin        = role === 'admin' || isMaster
   const canManageUsers = isMaster
 
   return (
     <AuthContext.Provider value={{
-      user, tenant, role, loading,
-      isMaster, isAdmin, canManageUsers,
+      user, tenant, role, tenantId, userId,
+      loading, isMaster, isAdmin, canManageUsers,
       logout, refreshUser,
     }}>
       {children}
