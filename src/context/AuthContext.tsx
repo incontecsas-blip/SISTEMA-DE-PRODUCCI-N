@@ -9,7 +9,6 @@ import {
   useCallback,
   type ReactNode,
 } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User, Tenant, UserRole } from '@/types/database'
 
@@ -28,116 +27,57 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]     = useState<User | null>(null)
-  const [tenant, setTenant] = useState<Tenant | null>(null)
+  const [user, setUser]       = useState<User | null>(null)
+  const [tenant, setTenant]   = useState<Tenant | null>(null)
   const [loading, setLoading] = useState(true)
-  const router  = useRouter()
   const supabase = createClient()
 
-  const loadUserProfile = useCallback(async (authUserId: string) => {
+  const loadProfile = useCallback(async (uid: string) => {
     try {
-      // Cargar perfil del usuario
-      const { data: userProfile, error: userError } = await supabase
+      const { data: u } = await supabase
         .from('users')
         .select('*')
-        .eq('id', authUserId)
+        .eq('id', uid)
         .single()
 
-      if (userError) {
-        console.error('Error cargando perfil de usuario:', userError.message)
-        // Si no existe el perfil, cerrar sesión y mostrar error claro
-        await supabase.auth.signOut()
-        setUser(null)
-        setTenant(null)
-        setLoading(false)
-        return
+      if (u) {
+        setUser(u as User)
+        const { data: t } = await supabase
+          .from('tenants')
+          .select('*')
+          .eq('id', u.tenant_id)
+          .single()
+        if (t) setTenant(t as Tenant)
       }
-
-      if (!userProfile) {
-        console.error('No se encontró perfil para user_id:', authUserId)
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
-
-      setUser(userProfile as User)
-
-      // Cargar datos del tenant
-      const { data: tenantData, error: tenantError } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('id', userProfile.tenant_id)
-        .single()
-
-      if (tenantError) {
-        console.error('Error cargando tenant:', tenantError.message)
-      } else {
-        setTenant(tenantData as Tenant)
-      }
-
-    } catch (err) {
-      console.error('Error inesperado en loadUserProfile:', err)
+    } catch (e) {
+      console.error('loadProfile error:', e)
     } finally {
       setLoading(false)
     }
   }, [supabase])
 
   const refreshUser = useCallback(async () => {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (authUser) await loadUserProfile(authUser.id)
-  }, [supabase, loadUserProfile])
+    const { data: { user: au } } = await supabase.auth.getUser()
+    if (au) await loadProfile(au.id)
+  }, [supabase, loadProfile])
 
   useEffect(() => {
-    let mounted = true
-
-    const init = async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!mounted) return
-      if (authUser) {
-        await loadUserProfile(authUser.id)
-      } else {
-        setLoading(false)
-      }
-    }
-
-    init()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return
-
-        if (event === 'SIGNED_IN' && session?.user) {
-          await loadUserProfile(session.user.id)
-          router.push('/dashboard')
-          router.refresh()
-        }
-
-        if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setTenant(null)
-          setLoading(false)
-        }
-      }
-    )
-
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
-  }, [supabase, loadUserProfile, router])
+    supabase.auth.getUser().then(({ data: { user: au } }) => {
+      if (au) loadProfile(au.id)
+      else setLoading(false)
+    })
+  }, [supabase, loadProfile])
 
   const logout = async () => {
-    setLoading(true)
     await supabase.auth.signOut()
     setUser(null)
     setTenant(null)
-    router.push('/auth/login')
-    setLoading(false)
+    window.location.href = '/auth/login'
   }
 
-  const role         = user?.rol ?? null
-  const isMaster     = role === 'master'
-  const isAdmin      = role === 'admin' || isMaster
+  const role           = user?.rol ?? null
+  const isMaster       = role === 'master'
+  const isAdmin        = role === 'admin' || isMaster
   const canManageUsers = isMaster
 
   return (
