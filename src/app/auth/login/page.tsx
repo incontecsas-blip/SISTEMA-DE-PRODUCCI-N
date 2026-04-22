@@ -21,30 +21,25 @@ export default function LoginPage() {
   try {
     setLoading(true)
 
+    console.log("ANTES DEL LOGIN")
+
     const { data, error } = await supabase.auth.signInWithPassword({
-  email,
-  password
-})
+      email,
+      password
+    })
 
-console.log("DATA:", data)
-console.log("ERROR:", error)
+    console.log("DESPUÉS DEL LOGIN")
+    console.log("DATA:", data)
+    console.log("ERROR:", error)
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
 
     toast.success('Sesión iniciada')
-
     router.push('/dashboard')
 
-  } catch (error: any) {
-    toast.error(
-      error.message === 'Invalid login credentials'
-        ? 'Email o contraseña incorrectos'
-        : error.message
-    )
+  } catch (err) {
+    console.error("ERROR LOGIN:", err)
   } finally {
-    // 🔥 ESTA LÍNEA ARREGLA TODO
     setLoading(false)
   }
 }
