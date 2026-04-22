@@ -26,26 +26,24 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refrescar sesión — obligatorio antes de cualquier lógica
   const { data: { user } } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
 
-  // Dejar pasar siempre las rutas de auth — el cliente maneja la lógica
-  if (pathname.startsWith('/auth')) {
+  // Nunca interceptar rutas de auth ni API
+  if (pathname.startsWith('/auth') || pathname.startsWith('/api')) {
     return supabaseResponse
   }
 
-  // Ruta raíz — redirigir según sesión
+  // Ruta raíz
   if (pathname === '/') {
-    if (user) return NextResponse.redirect(new URL('/dashboard', request.url))
-    return NextResponse.redirect(new URL('/auth/login', request.url))
+    return NextResponse.redirect(
+      new URL(user ? '/dashboard' : '/auth/login', request.url)
+    )
   }
 
-  // Rutas protegidas — si no hay sesión, ir al login
+  // Sin sesión → login
   if (!user) {
-    const loginUrl = new URL('/auth/login', request.url)
-    return NextResponse.redirect(loginUrl)
+    return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
   return supabaseResponse
