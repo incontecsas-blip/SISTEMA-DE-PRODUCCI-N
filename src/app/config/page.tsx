@@ -59,9 +59,18 @@ export default function ConfigPage() {
       if (!tenantId) { toast.error('Sesión expirada. Recarga la página.'); setSavingProd(false); return }
 
       const { error } = await supabase.from('productos').insert({
-        ...formProd,
         tenant_id: tenantId,
+        codigo: formProd.codigo,
+        nombre: formProd.nombre,
+        tipo: formProd.tipo,
+        unidad_id: formProd.unidad_id,
+        costo_unitario: formProd.costo_unitario,
+        stock_actual: formProd.stock_actual,
+        stock_minimo: formProd.stock_minimo,
+        stock_maximo: formProd.stock_maximo,
         caducidad_dias: formProd.caducidad_dias === '' ? null : formProd.caducidad_dias,
+        manejo_lotes: formProd.manejo_lotes,
+        activo: true,
       })
       if (error) {
         console.error('Error inserting producto:', error)
