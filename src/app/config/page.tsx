@@ -13,7 +13,7 @@ import clsx from 'clsx'
 type Tab = 'productos' | 'unidades' | 'params' | 'permisos'
 
 export default function ConfigPage() {
-  const { user } = useAuth()
+  const { user, tenantId, userId } = useAuth()
   const supabase  = createClient()
 
   const [tab, setTab]             = useState<Tab>('productos')
@@ -56,18 +56,25 @@ export default function ConfigPage() {
     }
     setSavingProd(true)
     try {
+      if (!tenantId) { toast.error('Sesión expirada. Recarga la página.'); setSavingProd(false); return }
+
       const { error } = await supabase.from('productos').insert({
         ...formProd,
+        tenant_id: tenantId,
+        created_by: userId,
         caducidad_dias: formProd.caducidad_dias === '' ? null : formProd.caducidad_dias,
       })
-      if (error) throw error
+      if (error) {
+        console.error('Error inserting producto:', error)
+        toast.error(error.code === '23505' ? 'El código ya existe' : 'Error: ' + error.message)
+        return
+      }
       toast.success('Producto creado')
       setShowProd(false)
       load()
     } catch (e: unknown) {
-      const m = e instanceof Error ? e.message : 'Error'
-      if (m.includes('unique')) toast.error('El código ya existe')
-      else toast.error(m)
+      console.error('guardarProducto exception:', e)
+      toast.error('Error inesperado al guardar')
     } finally {
       setSavingProd(false)
     }
