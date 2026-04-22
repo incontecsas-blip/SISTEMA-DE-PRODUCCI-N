@@ -16,25 +16,35 @@ export default function LoginPage() {
   const supabase = createClient()
 
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
+  e.preventDefault()
+
+  try {
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
 
     if (error) {
-      toast.error(
-        error.message === 'Invalid login credentials'
-          ? 'Email o contraseña incorrectos'
-          : error.message
-      )
-      setLoading(false)
-      return
+      throw error
     }
 
     toast.success('Sesión iniciada')
+
     router.push('/dashboard')
-    router.refresh()
+
+  } catch (error: any) {
+    toast.error(
+      error.message === 'Invalid login credentials'
+        ? 'Email o contraseña incorrectos'
+        : error.message
+    )
+  } finally {
+    // 🔥 ESTA LÍNEA ARREGLA TODO
+    setLoading(false)
   }
+}
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
