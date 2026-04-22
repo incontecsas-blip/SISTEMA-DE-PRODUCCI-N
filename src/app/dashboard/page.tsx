@@ -7,6 +7,7 @@ import { KpiCard, OrderStatusPill, OpStatusPill } from '@/components/ui'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
+export const dynamic = 'force-dynamic'
 export default async function DashboardPage() {
   const supabase = await createClient()
 
