@@ -61,7 +61,6 @@ export default function ConfigPage() {
       const { error } = await supabase.from('productos').insert({
         ...formProd,
         tenant_id: tenantId,
-        created_by: userId,
         caducidad_dias: formProd.caducidad_dias === '' ? null : formProd.caducidad_dias,
       })
       if (error) {
