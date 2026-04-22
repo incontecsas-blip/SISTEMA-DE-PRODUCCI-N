@@ -138,7 +138,7 @@ export default function PedidosPage() {
     setSaving(true)
     try {
       const estado: OrderStatus = confirmar ? 'confirmado' : 'borrador'
-      if (!tenantId) { toast.error('Sesión expirada'); setSaving(false); return }
+      if (!tenantId || !userId) { toast.error('Sesión expirada'); setSaving(false); return }
       const { data: pedido, error } = await supabase
         .from('pedidos')
         .insert({
