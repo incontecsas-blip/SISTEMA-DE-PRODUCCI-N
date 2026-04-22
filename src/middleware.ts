@@ -1,4 +1,5 @@
 // src/middleware.ts
+// Middleware mínimo — solo refresca cookies de Supabase, sin redirecciones
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -26,25 +27,9 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
-
-  // Nunca interceptar rutas de auth ni API
-  if (pathname.startsWith('/auth') || pathname.startsWith('/api')) {
-    return supabaseResponse
-  }
-
-  // Ruta raíz
-  if (pathname === '/') {
-    return NextResponse.redirect(
-      new URL(user ? '/dashboard' : '/auth/login', request.url)
-    )
-  }
-
-  // Sin sesión → login
-  if (!user) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
-  }
+  // Solo refrescar la sesión — sin ninguna lógica de redirección
+  // La protección de rutas la maneja cada página individualmente
+  await supabase.auth.getUser()
 
   return supabaseResponse
 }
