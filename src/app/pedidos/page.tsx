@@ -29,7 +29,7 @@ const ESTADO_ICONS: Record<OrderStatus, string> = {
 }
 
 export default function PedidosPage() {
-  const { user, role, tenantId, userId } = useAuth()
+  const { user, role, tenantId, userId, isAdmin } = useAuth()
   const supabase = createClient()
 
   const [pedidos, setPedidos]     = useState<Pedido[]>([])
@@ -204,6 +204,54 @@ export default function PedidosPage() {
     }
   }
 
+
+  // Eliminar pedido — solo admin/master, solo si no está en bodega/producción
+  async function eliminarPedido(pedido: Pedido) {
+    // Verificar permiso
+    if (!isAdmin) {
+      toast.error('Solo el Administrador o Admin Master pueden eliminar pedidos')
+      return
+    }
+
+    // Verificar estado — no se puede eliminar si ya entró a bodega o producción
+    const estadosBloqueados: OrderStatus[] = ['en_bodega', 'en_produccion', 'listo_entrega', 'entregado']
+    if (estadosBloqueados.includes(pedido.estado)) {
+      toast.error(`No se puede eliminar un pedido en estado "${ORDER_STATUS_LABELS[pedido.estado]}" — ya está vinculado a Bodega o Producción`)
+      return
+    }
+
+    // Verificar que no tenga OPs creadas
+    const { data: ops } = await supabase
+      .from('ordenes_produccion')
+      .select('id')
+      .eq('pedido_id', pedido.id)
+      .limit(1)
+
+    if (ops && ops.length > 0) {
+      toast.error('No se puede eliminar — este pedido tiene Órdenes de Producción vinculadas')
+      return
+    }
+
+    // Confirmar
+    if (!confirm(`¿Eliminar definitivamente el pedido ${pedido.numero_pedido}?\n\nEsta acción no se puede deshacer.`)) return
+
+    // Eliminar líneas primero (CASCADE debería hacerlo, pero por seguridad)
+    await supabase.from('pedidos_lineas').delete().eq('pedido_id', pedido.id)
+    await supabase.from('pedidos_historial').delete().eq('pedido_id', pedido.id)
+
+    // Eliminar pedido
+    const { error } = await supabase.from('pedidos').delete().eq('id', pedido.id)
+
+    if (error) {
+      toast.error('Error al eliminar: ' + error.message)
+      return
+    }
+
+    toast.success(`Pedido ${pedido.numero_pedido} eliminado`)
+    if (selected?.id === pedido.id) setSelected(null)
+    fetchPedidos()
+  }
+
   async function verDetalle(p: Pedido) {
     const { data } = await supabase
       .from('pedidos')
@@ -282,6 +330,15 @@ export default function PedidosPage() {
                         → {ORDER_STATUS_LABELS[ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(p.estado) + 1]]}
                       </button>
                     )}
+                    {isAdmin && !['en_bodega','en_produccion','listo_entrega','entregado'].includes(p.estado) && (
+                      <button
+                        className="btn text-xs px-2 py-1 text-red-500 hover:bg-red-50 hover:border-red-200"
+                        onClick={() => eliminarPedido(p)}
+                        title="Eliminar pedido"
+                      >
+                        🗑
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -303,6 +360,14 @@ export default function PedidosPage() {
               {ORDER_STATUS_FLOW.indexOf(selected.estado) < ORDER_STATUS_FLOW.length - 1 && (
                 <button className="btn-primary text-xs" onClick={() => avanzarEstado(selected)}>
                   → Mover a {ORDER_STATUS_LABELS[ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(selected.estado) + 1]]}
+                </button>
+              )}
+              {isAdmin && !['en_bodega','en_produccion','listo_entrega','entregado'].includes(selected.estado) && (
+                <button
+                  className="btn text-xs text-red-500 hover:bg-red-50 hover:border-red-200"
+                  onClick={() => eliminarPedido(selected)}
+                >
+                  🗑 Eliminar pedido
                 </button>
               )}
               <button className="btn text-xs" onClick={() => setSelected(null)}>✕ Cerrar</button>
