@@ -29,7 +29,7 @@ const ESTADO_ICONS: Record<OrderStatus, string> = {
 }
 
 export default function PedidosPage() {
-  const { user, role, tenantId, userId, isAdmin } = useAuth()
+  const { user, role, tenantId, userId, isAdmin, loading: authLoading } = useAuth()
   const supabase = createClient()
 
   const [pedidos, setPedidos]     = useState<Pedido[]>([])
@@ -155,7 +155,12 @@ export default function PedidosPage() {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Error creating pedido:', error)
+        toast.error('Error al crear pedido: ' + error.message)
+        setSaving(false)
+        return
+      }
 
       // Insertar líneas
       const { error: eLineas } = await supabase.from('pedidos_lineas').insert(
@@ -168,14 +173,20 @@ export default function PedidosPage() {
           descuento_pct: l.descuento_pct,
         }))
       )
-      if (eLineas) throw eLineas
+      if (eLineas) {
+        console.error('Error creating lineas:', eLineas)
+        toast.error('Error en líneas del pedido: ' + eLineas.message)
+        setSaving(false)
+        return
+      }
 
       toast.success(confirmar ? `Pedido ${pedido.numero_pedido} confirmado` : 'Borrador guardado')
       setShowModal(false)
       resetForm()
       fetchPedidos()
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al guardar')
+      console.error('handleGuardar exception:', e)
+      toast.error(e instanceof Error ? e.message : 'Error inesperado al guardar')
     } finally {
       setSaving(false)
     }
@@ -271,7 +282,7 @@ export default function PedidosPage() {
     setHistorial(data ?? [])
   }
 
-  if (loading) return <AppLayout title="Pedidos" breadcrumb="MÓDULOS / PEDIDOS"><PageLoader /></AppLayout>
+  if (loading || authLoading) return <AppLayout title="Pedidos" breadcrumb="MÓDULOS / PEDIDOS"><PageLoader /></AppLayout>
 
   return (
     <AppLayout
