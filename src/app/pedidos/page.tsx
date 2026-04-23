@@ -539,53 +539,87 @@ export default function PedidosPage() {
 
         {/* Líneas del pedido */}
         <div>
-          <p className="text-xs font-semibold text-slate-700 mb-2">Líneas del Pedido <span className="text-red-400">*</span></p>
-          <div className="flex flex-col gap-2">
-            {lineas.map((l, i) => (
-              <div key={i} className="grid grid-cols-[2fr_80px_90px_80px_80px_auto] gap-2 items-center
-                                      p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <select
-                  className="input text-xs"
-                  value={l.producto_id}
-                  onChange={e => updateLinea(i, 'producto_id', e.target.value)}
-                >
-                  {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </select>
-                <input
-                  className="input font-mono text-xs"
-                  type="number" min={1} placeholder="Cant."
-                  value={l.cantidad}
-                  onChange={e => updateLinea(i, 'cantidad', +e.target.value)}
-                />
-                <select
-                  className="input text-xs"
-                  value={l.unidad_id}
-                  onChange={e => updateLinea(i, 'unidad_id', e.target.value)}
-                >
-                  {unidades.map(u => <option key={u.id} value={u.id}>{u.simbolo}</option>)}
-                </select>
-                <input
-                  className="input font-mono text-xs"
-                  type="number" min={0} step={0.01} placeholder="Precio"
-                  value={l.precio_unitario}
-                  onChange={e => updateLinea(i, 'precio_unitario', +e.target.value)}
-                />
-                <input
-                  className="input font-mono text-xs"
-                  type="number" min={0} max={100} placeholder="Desc%"
-                  value={l.descuento_pct}
-                  onChange={e => updateLinea(i, 'descuento_pct', +e.target.value)}
-                />
-                <button className="btn-danger text-xs px-2 py-1" onClick={() => setLineas(ls => ls.filter((_, j) => j !== i))}>✕</button>
-              </div>
-            ))}
-          </div>
-          <button className="btn text-xs mt-2" onClick={agregarLinea}>+ Agregar producto</button>
+          <p className="text-xs font-semibold text-slate-700 mb-2">
+            Líneas del Pedido <span className="text-red-400">*</span>
+          </p>
+
+          {/* Headers de columnas */}
           {lineas.length > 0 && (
-            <p className="text-right font-mono font-bold text-sky-600 mt-2">
-              Total: ${totalPedido.toFixed(2)}
-            </p>
+            <div className="grid grid-cols-[2fr_90px_90px_100px_80px_32px] gap-2 px-3 mb-1">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Producto</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Cantidad</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Unidad</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Precio Unit.</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Desc. %</span>
+              <span />
+            </div>
           )}
+
+          <div className="flex flex-col gap-2">
+            {lineas.map((l, i) => {
+              const subtotalLinea = l.cantidad * l.precio_unitario * (1 - l.descuento_pct / 100)
+              return (
+                <div key={i} className="grid grid-cols-[2fr_90px_90px_100px_80px_32px] gap-2 items-center
+                                        p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <select
+                    className="input text-xs"
+                    value={l.producto_id}
+                    onChange={e => updateLinea(i, 'producto_id', e.target.value)}
+                  >
+                    {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                  <input
+                    className="input font-mono text-xs text-center"
+                    type="number" min={1} placeholder="0"
+                    value={l.cantidad || ''}
+                    onChange={e => updateLinea(i, 'cantidad', +e.target.value)}
+                  />
+                  <select
+                    className="input text-xs"
+                    value={l.unidad_id}
+                    onChange={e => updateLinea(i, 'unidad_id', e.target.value)}
+                  >
+                    {unidades.map(u => <option key={u.id} value={u.id}>{u.simbolo}</option>)}
+                  </select>
+                  <input
+                    className="input font-mono text-xs text-right"
+                    type="number" min={0} step={0.01} placeholder="0.00"
+                    value={l.precio_unitario || ''}
+                    onChange={e => updateLinea(i, 'precio_unitario', +e.target.value)}
+                  />
+                  <input
+                    className="input font-mono text-xs text-center"
+                    type="number" min={0} max={100} placeholder="0"
+                    value={l.descuento_pct || ''}
+                    onChange={e => updateLinea(i, 'descuento_pct', +e.target.value)}
+                  />
+                  <button
+                    className="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 text-xs font-bold flex items-center justify-center border border-red-200"
+                    onClick={() => setLineas(ls => ls.filter((_, j) => j !== i))}
+                  >✕</button>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex items-center justify-between mt-2">
+            <button className="btn text-xs" onClick={agregarLinea}>+ Agregar producto</button>
+            {lineas.length > 0 && (
+              <div className="text-right">
+                {lineas.map((l, i) => {
+                  const sub = l.cantidad * l.precio_unitario * (1 - l.descuento_pct / 100)
+                  return sub > 0 ? (
+                    <p key={i} className="text-xs text-slate-500">
+                      {l.producto_nombre}: <span className="font-mono">${sub.toFixed(2)}</span>
+                    </p>
+                  ) : null
+                })}
+                <p className="font-mono font-bold text-sky-600 text-sm border-t border-slate-200 pt-1 mt-1">
+                  Total: ${totalPedido.toFixed(2)}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <Field label="Observaciones">
