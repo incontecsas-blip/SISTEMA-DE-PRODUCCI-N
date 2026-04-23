@@ -130,22 +130,25 @@ export default function BodegaPage() {
         const ingredientes: IngredienteReq[] = []
 
         if (formula?.lineas) {
-          for (const fl of formula.lineas as {
+          type FormulaLineaRaw = {
             cantidad: number
-            mp: { id: string; nombre: string; codigo: string } | null
-            unidad: { simbolo: string } | null
-          }[]) {
-            if (!fl.mp) continue
+            mp: { id: string; nombre: string; codigo: string } | { id: string; nombre: string; codigo: string }[] | null
+            unidad: { simbolo: string } | { simbolo: string }[] | null
+          }
+          for (const fl of (formula.lineas as unknown as FormulaLineaRaw[])) {
+            const mpItem = Array.isArray(fl.mp) ? fl.mp[0] : fl.mp
+            const unItem = Array.isArray(fl.unidad) ? fl.unidad[0] : fl.unidad
+            if (!mpItem) continue
             const factor = linea.cantidad / (formula.base_cantidad ?? 1)
             const qty_teorica = parseFloat((fl.cantidad * factor).toFixed(4))
-            const prod = prods.find(p => p.id === fl.mp!.id)
+            const prod = prods.find(p => p.id === mpItem.id)
             const stock_ok = (prod?.stock_actual ?? 0) >= qty_teorica
             if (!stock_ok) todos_ok = false
             ingredientes.push({
-              mp_id: fl.mp.id,
-              mp_nombre: fl.mp.nombre,
-              mp_codigo: fl.mp.codigo,
-              unidad: fl.unidad?.simbolo ?? 'kg',
+              mp_id: mpItem.id,
+              mp_nombre: mpItem.nombre,
+              mp_codigo: mpItem.codigo,
+              unidad: unItem?.simbolo ?? 'kg',
               qty_teorica,
               stock_actual: prod?.stock_actual ?? 0,
               stock_ok,
