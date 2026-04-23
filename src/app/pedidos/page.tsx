@@ -199,8 +199,14 @@ export default function PedidosPage() {
     setObs(''); setLineas([])
   }
 
-  // Avanzar estado
+  // Avanzar estado — en Pedidos solo se puede confirmar (borrador→confirmado)
+  // Los demás estados (en_bodega, listo_entrega, entregado) los gestiona Bodega
   async function avanzarEstado(pedido: Pedido) {
+    // Solo admin puede cambiar estados desde Pedidos
+    if (!isAdmin && pedido.estado !== 'borrador') {
+      toast.error('Solo el Administrador puede cambiar el estado')
+      return
+    }
     const idx = ORDER_STATUS_FLOW.indexOf(pedido.estado)
     if (idx < 0 || idx >= ORDER_STATUS_FLOW.length - 1) return
     const nuevoEstado = ORDER_STATUS_FLOW[idx + 1]
@@ -338,9 +344,10 @@ export default function PedidosPage() {
                   <td><OrderStatusPill status={p.estado} /></td>
                   <td className="flex gap-1.5">
                     <button className="btn text-xs px-2 py-1" onClick={() => verDetalle(p)}>Ver</button>
-                    {ORDER_STATUS_FLOW.indexOf(p.estado) < ORDER_STATUS_FLOW.length - 1 && (
+                    {/* Solo confirmar desde pedidos — el resto lo maneja Bodega/Producción */}
+                    {p.estado === 'borrador' && (
                       <button className="btn-primary text-xs px-2 py-1" onClick={() => avanzarEstado(p)}>
-                        → {ORDER_STATUS_LABELS[ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(p.estado) + 1]]}
+                        ✓ Confirmar
                       </button>
                     )}
                     {isAdmin && !['en_bodega','en_produccion','listo_entrega','entregado'].includes(p.estado) && (
@@ -370,10 +377,16 @@ export default function PedidosPage() {
             </div>
             <div className="ml-auto flex gap-2">
               <button className="btn text-xs" onClick={() => toast.success('PDF del pedido generado')}>⬇ PDF</button>
-              {ORDER_STATUS_FLOW.indexOf(selected.estado) < ORDER_STATUS_FLOW.length - 1 && (
+              {/* Solo confirmar desde Pedidos — Listo para entrega y Entregado los gestiona Bodega */}
+              {selected.estado === 'borrador' && (
                 <button className="btn-primary text-xs" onClick={() => avanzarEstado(selected)}>
-                  → Mover a {ORDER_STATUS_LABELS[ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(selected.estado) + 1]]}
+                  ✓ Confirmar pedido
                 </button>
+              )}
+              {['en_bodega','en_produccion','listo_entrega','entregado'].includes(selected.estado) && (
+                <span className="text-xs text-slate-400 italic px-2">
+                  Gestionado desde Bodega / Producción
+                </span>
               )}
               {isAdmin && !['en_bodega','en_produccion','listo_entrega','entregado'].includes(selected.estado) && (
                 <button
