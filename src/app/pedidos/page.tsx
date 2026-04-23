@@ -143,14 +143,16 @@ export default function PedidosPage() {
         .from('pedidos')
         .insert({
           tenant_id: tenantId,
+          numero_pedido: null,                        // lo genera el trigger automáticamente
           cliente_id: clienteSel.id,
           vendedor_id: userId,
           estado,
+          fecha_pedido: new Date().toISOString().split('T')[0],
           fecha_entrega_solicitada: fechaEntrega,
-          descuento_pct: clienteSel.descuento_pct,
-          observaciones,
+          descuento_pct: clienteSel.descuento_pct ?? 0,
           subtotal: totalPedido,
           total: totalPedido,
+          observaciones: observaciones || null,
         })
         .select()
         .single()
