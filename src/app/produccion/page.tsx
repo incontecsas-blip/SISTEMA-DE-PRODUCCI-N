@@ -52,6 +52,9 @@ export default function ProduccionPage() {
   const [consumos, setConsumos]     = useState<ConsumoRow[]>([])
   const [mermaParam, setMermaParam] = useState(5)
   const [savingConsumos, setSavingConsumos] = useState(false)
+  // Modal Ver OP detalle
+  const [opDetalle, setOpDetalle]   = useState<OrdenProduccion | null>(null)
+  const [opIngredientes, setOpIngredientes] = useState<ConsumoRow[]>([])
 
   const fetchOPs = useCallback(async () => {
     let q = supabase
@@ -83,6 +86,35 @@ export default function ProduccionPage() {
       .eq('id', op.id)
     if (error) toast.error('Error al iniciar OP')
     else { toast.success(`OP ${op.numero_op} iniciada`); fetchOPs() }
+  }
+
+  // Ver detalle de OP con ingredientes teóricos calculados (sin iniciar)
+  async function verDetalleOP(op: OrdenProduccion) {
+    setOpDetalle(op)
+    setOpIngredientes([])
+
+    const { data: reqs } = await supabase
+      .rpc('fn_calcular_requerimientos', {
+        p_formula_id: op.formula_id,
+        p_cantidad_pt: op.cantidad_a_producir,
+      })
+
+    if (reqs) {
+      setOpIngredientes((reqs as RpcRequerimiento[]).map(r => ({
+        id: '',
+        op_id: op.id,
+        mp_id: r.mp_id,
+        lote_id: null,
+        cantidad_teorica: r.qty_teorica,
+        cantidad_real: null,
+        merma: 0,
+        merma_pct: null,
+        dentro_parametro: null,
+        mp_nombre: r.mp_nombre,
+        mp_codigo: r.mp_codigo,
+        unidad: r.unidad_sim,
+      })))
+    }
   }
 
   async function abrirConsumos(op: OrdenProduccion) {
@@ -294,6 +326,12 @@ export default function ProduccionPage() {
                       </td>
                       <td><OpStatusPill status={op.estado} /></td>
                       <td className="flex gap-1.5">
+                        <button
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors"
+                          onClick={() => verDetalleOP(op)}
+                        >
+                          👁 Ver
+                        </button>
                         {op.estado === 'pendiente' && (
                           <button
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-emerald-500 text-white border border-emerald-500 hover:bg-emerald-600 transition-colors"
@@ -458,6 +496,86 @@ export default function ProduccionPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Ver OP Detalle */}
+      {opDetalle && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setOpDetalle(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center text-xl">⚙️</div>
+              <div>
+                <h3 className="font-bold text-[15px]">{opDetalle.numero_op} — Detalle de Ingredientes</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Producto: {(opDetalle.formula as {producto?:{nombre?:string}}|null)?.producto?.nombre}
+                  {' · '}Cantidad a producir: <strong>{opDetalle.cantidad_a_producir} kg</strong>
+                </p>
+              </div>
+              <button onClick={() => setOpDetalle(null)}
+                className="ml-auto w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100">
+                ✕
+              </button>
+            </div>
+
+            <div className="px-6 py-5">
+              <p className="font-mono text-[9px] tracking-widest text-slate-400 uppercase mb-3">
+                Ingredientes requeridos — Calculados con fórmula activa
+              </p>
+
+              {opIngredientes.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <div className="text-3xl mb-2">⏳</div>
+                  <p className="text-sm">Calculando ingredientes...</p>
+                </div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Materia Prima</th>
+                      <th>Código</th>
+                      <th>Cantidad Teórica</th>
+                      <th>Unidad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {opIngredientes.map((ing, i) => (
+                      <tr key={i}>
+                        <td className="font-semibold">{ing.mp_nombre}</td>
+                        <td className="font-mono text-xs text-slate-500">{ing.mp_codigo}</td>
+                        <td className="font-mono font-bold text-sky-600 text-[15px]">
+                          {ing.cantidad_teorica.toFixed(4)}
+                        </td>
+                        <td className="font-mono text-slate-500">{ing.unidad}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end">
+              <button className="btn" onClick={() => setOpDetalle(null)}>Cerrar</button>
+              {opDetalle.estado === 'pendiente' && (
+                <button
+                  className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-500 text-white border border-emerald-500 hover:bg-emerald-600"
+                  onClick={() => { iniciarOP(opDetalle); setOpDetalle(null) }}
+                >
+                  ▶ Iniciar OP
+                </button>
+              )}
+              {opDetalle.estado === 'en_proceso' && (
+                <button
+                  className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-lg bg-sky-500 text-white border border-sky-500 hover:bg-sky-600"
+                  onClick={() => { abrirConsumos(opDetalle); setOpDetalle(null) }}
+                >
+                  Ver consumos reales
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </AppLayout>
   )
 }
