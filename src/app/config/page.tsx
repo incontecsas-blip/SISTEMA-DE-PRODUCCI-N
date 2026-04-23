@@ -25,6 +25,7 @@ export default function ConfigPage() {
   // Modal producto
   const [showProd, setShowProd] = useState(false)
   const [savingProd, setSavingProd] = useState(false)
+  const [editingProdId, setEditingProdId] = useState<string | null>(null)
   const [formProd, setFormProd] = useState({
     codigo: '', nombre: '', tipo: 'MP' as 'MP' | 'PT',
     unidad_id: '', costo_unitario: 0,
@@ -79,10 +80,65 @@ export default function ConfigPage() {
       }
       toast.success('Producto creado')
       setShowProd(false)
+      setEditingProdId(null)
       load()
     } catch (e: unknown) {
       console.error('guardarProducto exception:', e)
       toast.error('Error inesperado al guardar')
+    } finally {
+      setSavingProd(false)
+    }
+  }
+
+  async function editarProducto(p: Producto) {
+    setEditingProdId(p.id)
+    setFormProd({
+      codigo: p.codigo,
+      nombre: p.nombre,
+      tipo: p.tipo,
+      unidad_id: p.unidad_id,
+      costo_unitario: p.costo_unitario,
+      stock_minimo: p.stock_minimo,
+      stock_maximo: p.stock_maximo,
+      stock_actual: p.stock_actual,
+      caducidad_dias: p.caducidad_dias ?? '',
+      manejo_lotes: p.manejo_lotes,
+    })
+    setShowProd(true)
+  }
+
+  async function actualizarProducto() {
+    if (!formProd.nombre || !formProd.unidad_id) {
+      toast.error('Nombre y unidad son obligatorios'); return
+    }
+    if (!editingProdId) return
+    setSavingProd(true)
+    try {
+      // Solo actualiza campos de configuración — NO altera tipo ni código
+      // Los pedidos y OPs existentes no se ven afectados porque referencian
+      // el producto por ID, no por nombre ni tipo
+      const { error } = await supabase.from('productos')
+        .update({
+          nombre: formProd.nombre,
+          unidad_id: formProd.unidad_id,
+          costo_unitario: formProd.costo_unitario,
+          stock_minimo: formProd.stock_minimo,
+          stock_maximo: formProd.stock_maximo,
+          caducidad_dias: formProd.caducidad_dias === '' ? null : formProd.caducidad_dias,
+          manejo_lotes: formProd.manejo_lotes,
+        })
+        .eq('id', editingProdId)
+
+      if (error) {
+        toast.error('Error: ' + error.message)
+        return
+      }
+      toast.success('Producto actualizado · Los pedidos y OPs existentes no fueron afectados')
+      setShowProd(false)
+      setEditingProdId(null)
+      load()
+    } catch (e: unknown) {
+      toast.error('Error inesperado')
     } finally {
       setSavingProd(false)
     }
@@ -159,7 +215,7 @@ export default function ConfigPage() {
               <tr>
                 <th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th>
                 <th>Stock Actual</th><th>Mín.</th><th>Máx.</th>
-                <th>Cad. días</th><th>Lotes</th><th>Estado</th>
+                <th>Cad. días</th><th>Lotes</th><th>Estado</th><th>Acc.</th>
               </tr>
             </thead>
             <tbody>
@@ -184,6 +240,14 @@ export default function ConfigPage() {
                     : <span className="status-pill bg-slate-100 text-slate-400 border-slate-200 text-[9px]">No</span>
                   }</td>
                   <td>{stockPill(p)}</td>
+                  <td>
+                    <button
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white text-sky-600 border border-sky-200 hover:bg-sky-50 transition-colors"
+                      onClick={() => editarProducto(p)}
+                    >
+                      ✏ Editar
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -341,23 +405,41 @@ export default function ConfigPage() {
       {/* Modal nuevo producto */}
       <Modal
         open={showProd}
-        onClose={() => setShowProd(false)}
-        title="Nuevo Producto / MP"
-        subtitle="Configurar stock, alertas y parámetros de lote"
+        onClose={() => { setShowProd(false); setEditingProdId(null) }}
+        title={editingProdId ? 'Editar Producto / MP' : 'Nuevo Producto / MP'}
+        subtitle={editingProdId
+          ? 'Los pedidos y OPs existentes no serán afectados'
+          : 'Configurar stock, alertas y parámetros de lote'}
         icon="📦"
         footer={
           <>
-            <button className="btn" onClick={() => setShowProd(false)}>Cancelar</button>
-            <button className="btn-primary" onClick={guardarProducto} disabled={savingProd}>
-              {savingProd ? 'Guardando...' : '✓ Guardar'}
+            <button className="btn" onClick={() => { setShowProd(false); setEditingProdId(null) }}>Cancelar</button>
+            <button className="btn-primary" onClick={editingProdId ? actualizarProducto : guardarProducto} disabled={savingProd}>
+              {savingProd ? 'Guardando...' : editingProdId ? '✓ Actualizar' : '✓ Guardar'}
             </button>
           </>
         }
       >
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Código" required><input className="input font-mono" value={formProd.codigo} onChange={e => setFormProd(f => ({...f,codigo:e.target.value}))} placeholder="MP-007" /></Field>
+          <Field label="Código" required hint={editingProdId ? 'No editable — referenciado por pedidos y OPs' : undefined}>
+            <input className="input font-mono" value={formProd.codigo}
+              onChange={e => !editingProdId && setFormProd(f => ({...f,codigo:e.target.value}))}
+              placeholder="MP-007"
+              disabled={!!editingProdId}
+              style={editingProdId ? {opacity:0.5,cursor:'not-allowed'} : {}}
+            />
+          </Field>
           <Field label="Nombre" required><input className="input" value={formProd.nombre} onChange={e => setFormProd(f => ({...f,nombre:e.target.value}))} /></Field>
-          <Field label="Tipo"><select className="input" value={formProd.tipo} onChange={e => setFormProd(f => ({...f,tipo:e.target.value as 'MP'|'PT'}))}><option value="MP">MP - Materia Prima</option><option value="PT">PT - Producto Terminado</option></select></Field>
+          <Field label="Tipo" hint={editingProdId ? 'No editable — puede afectar OPs existentes' : undefined}>
+            <select className="input" value={formProd.tipo}
+              onChange={e => !editingProdId && setFormProd(f => ({...f,tipo:e.target.value as 'MP'|'PT'}))}
+              disabled={!!editingProdId}
+              style={editingProdId ? {opacity:0.5,cursor:'not-allowed'} : {}}
+            >
+              <option value="MP">MP - Materia Prima</option>
+              <option value="PT">PT - Producto Terminado</option>
+            </select>
+          </Field>
           <Field label="Unidad Base" required><select className="input" value={formProd.unidad_id} onChange={e => setFormProd(f => ({...f,unidad_id:e.target.value}))}><option value="">— Seleccionar —</option>{unidades.map(u=><option key={u.id} value={u.id}>{u.nombre} ({u.simbolo})</option>)}</select></Field>
           <Field label="Costo Unitario"><input className="input font-mono" type="number" min={0} step={0.0001} value={formProd.costo_unitario} onChange={e => setFormProd(f => ({...f,costo_unitario:+e.target.value}))} /></Field>
           <Field label="Stock Inicial"><input className="input font-mono" type="number" min={0} value={formProd.stock_actual} onChange={e => setFormProd(f => ({...f,stock_actual:+e.target.value}))} /></Field>
