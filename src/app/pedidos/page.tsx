@@ -11,6 +11,7 @@ import { ORDER_STATUS_FLOW, ORDER_STATUS_LABELS } from '@/types/database'
 import type { OrderStatus } from '@/types/database'
 import { format, addDays } from 'date-fns'
 import toast from 'react-hot-toast'
+import { downloadCsv, downloadHtmlPdf } from '@/lib/download'
 import clsx from 'clsx'
 
 // ── tipos locales ──────────────────────────────────────────────
@@ -370,6 +371,57 @@ export default function PedidosPage() {
     setHistorial(data ?? [])
   }
 
+  // ── Exportar Excel lista de pedidos ─────────────────────────
+  function exportarExcelPedidos() {
+    if (!pedidos.length) { toast.error('No hay pedidos para exportar'); return }
+    const rows = pedidos.map(p => {
+      const cli = p.cliente as {nombre?:string;ruc?:string}|null
+      const vend = p.vendedor as {nombre?:string}|null
+      return [
+        p.numero_pedido,
+        p.fecha_pedido,
+        p.fecha_entrega_solicitada,
+        cli?.nombre ?? '—',
+        cli?.ruc ?? '—',
+        vend?.nombre ?? '—',
+        p.estado,
+        p.descuento_pct,
+        Number(p.subtotal).toFixed(2),
+        Number(p.total).toFixed(2),
+      ]
+    })
+    downloadCsv(
+      ['Pedido','F. Pedido','F. Entrega','Cliente','RUC','Vendedor','Estado','Desc %','Subtotal','Total'],
+      rows, `pedidos_${new Date().toISOString().split('T')[0]}.csv`
+    )
+    toast.success('✅ Excel descargado')
+  }
+
+  // ── PDF de un pedido individual ───────────────────────────────
+  function exportarPdfPedido(p: Pedido) {
+    const cli  = p.cliente as {nombre?:string;ruc?:string}|null
+    const vend = p.vendedor as {nombre?:string}|null
+    const lineas = (p.lineas ?? []) as {cantidad:number;precio_unitario:number;descuento_pct:number;subtotal_linea:number;producto?:{nombre?:string};unidad?:{simbolo?:string}}[]
+
+    const rows = lineas.map(l => [
+      l.producto?.nombre ?? '—',
+      `${l.cantidad} ${l.unidad?.simbolo ?? ''}`,
+      '$' + l.precio_unitario.toFixed(2),
+      l.descuento_pct + '%',
+      '$' + l.subtotal_linea.toFixed(2),
+    ])
+    rows.push(['', '', '', 'TOTAL', '$' + Number(p.total).toFixed(2)])
+
+    downloadHtmlPdf(
+      `Pedido ${p.numero_pedido}`,
+      `Cliente: ${cli?.nombre ?? '—'} (${cli?.ruc ?? '—'}) · Vendedor: ${vend?.nombre ?? '—'} · Estado: ${p.estado} · Entrega: ${p.fecha_entrega_solicitada}`,
+      ['Producto','Cantidad','Precio Unit.','Descuento','Subtotal'],
+      rows,
+      `pedido_${p.numero_pedido}.html`,
+      `Total: $${Number(p.total).toFixed(2)}`
+    )
+  }
+
   if (loading || authLoading) return <AppLayout title="Pedidos" breadcrumb="MÓDULOS / PEDIDOS"><PageLoader /></AppLayout>
 
   return (
@@ -404,8 +456,7 @@ export default function PedidosPage() {
           <span className="font-bold text-[14px]">Pedidos</span>
           <span className="text-[10px] font-mono bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md">{pedidos.length}</span>
           <div className="ml-auto flex gap-2">
-            <button className="btn text-xs" onClick={() => toast.success('Excel generado')}>⬇ Excel</button>
-            <button className="btn text-xs" onClick={() => toast.success('PDF generado')}>⬇ PDF</button>
+            <button className="btn text-xs" onClick={exportarExcelPedidos}>📊 Excel</button>
           </div>
         </div>
         {pedidos.length === 0
@@ -462,7 +513,7 @@ export default function PedidosPage() {
               <p className="text-xs text-slate-500 mt-0.5">Vendedor: {(selected.vendedor as { nombre?: string })?.nombre} · Entrega: {format(new Date(selected.fecha_entrega_solicitada), 'dd/MM/yyyy')}</p>
             </div>
             <div className="ml-auto flex gap-2">
-              <button className="btn text-xs" onClick={() => toast.success('PDF del pedido generado')}>⬇ PDF</button>
+              <button className="btn text-xs" onClick={() => exportarPdfPedido(selected)}>📄 PDF</button>
               {/* Solo confirmar desde Pedidos — Listo para entrega y Entregado los gestiona Bodega */}
               {selected.estado === 'borrador' && (
                 <button className="btn-primary text-xs" onClick={() => avanzarEstado(selected)}>

@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import type { Formula, Producto, UnidadMedida } from '@/types/database'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { downloadHtmlPdf } from '@/lib/download'
 
 interface LineaForm { mp_id: string; cantidad: number; unidad_id: string; es_semielaborado: boolean }
 
@@ -102,6 +103,27 @@ export default function FormulasPage() {
     }
   }
 
+  // ── PDF de una fórmula ─────────────────────────────────────────
+  function exportarPdfFormula(formula: Formula) {
+    const prod = formula.producto as {nombre?:string;codigo?:string}|null
+    const lineas = (formula.lineas ?? []) as {cantidad:number;mp?:{nombre?:string;codigo?:string};unidad?:{simbolo?:string}}[]
+    const rows = lineas.map(l => [
+      l.mp?.nombre ?? '—',
+      l.mp?.codigo ?? '—',
+      l.cantidad.toFixed(5),
+      l.unidad?.simbolo ?? '—',
+      ((l.cantidad / formula.base_cantidad) * 100).toFixed(2) + '%',
+    ])
+    downloadHtmlPdf(
+      `Fórmula: ${prod?.nombre ?? '—'}`,
+      `Código: ${prod?.codigo ?? '—'} · Versión: v${formula.version} · Base: ${formula.base_cantidad} kg PT · Creada: ${formula.created_at.split('T')[0]}`,
+      ['Materia Prima','Código MP','Cantidad','Unidad','% en fórmula'],
+      rows,
+      `formula_${(prod?.codigo ?? 'F').replace(/\s/g,'_')}_v${formula.version}.html`,
+      `Base de cálculo: ${formula.base_cantidad} kg de PT`
+    )
+  }
+
   if (loading) return <AppLayout title="Fórmulas" breadcrumb="MÓDULOS / FÓRMULAS"><PageLoader /></AppLayout>
 
   // Agrupar fórmulas por producto
@@ -139,6 +161,9 @@ export default function FormulasPage() {
                   <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
                     v{activa.version} · activa
                   </span>
+                  <button className="btn text-xs px-2 py-1" onClick={() => exportarPdfFormula(activa)}>
+                    📄 PDF
+                  </button>
                   <button className="btn text-xs px-2 py-1" onClick={() => { setShowModal(true); setLineas([]) }}>
                     ✏ Nueva versión
                   </button>
