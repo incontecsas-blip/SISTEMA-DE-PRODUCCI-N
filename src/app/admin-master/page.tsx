@@ -118,10 +118,21 @@ export default function AdminMasterPage() {
       // 1. Crear usuario en Supabase Auth via Admin API
       //    En producción esto debe ir en una Edge Function con service_role
       //    Aquí simulamos el flujo completo
+      // Obtener token de sesión actual para enviarlo en el header
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        toast.error('Sesión expirada. Recarga la página e intenta de nuevo.')
+        setSaving(false)
+        return
+      }
+
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           nombre: formUser.nombre,
           email: formUser.email,

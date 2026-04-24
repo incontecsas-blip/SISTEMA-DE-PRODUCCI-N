@@ -14,7 +14,7 @@ export default async function DashboardPage() {
   const [
     { data: pedidosHoy },
     { data: opsEnCurso },
-    { data: alertasStock },
+    { data: pedidosBodega },
     { data: listosEntrega },
     { data: recentePedidos },
     { data: recenteOPs },
@@ -32,12 +32,11 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact' })
       .in('estado', ['pendiente', 'en_proceso']),
 
-    // Productos con stock bajo mínimo
+    // Pedidos confirmados pendientes de despacho en bodega
     supabase
-      .from('productos')
+      .from('pedidos')
       .select('id', { count: 'exact' })
-      .eq('activo', true)
-      .filter('stock_actual', 'lt', 'stock_minimo'),
+      .eq('estado', 'confirmado'),
 
     // Pedidos listos para entrega
     supabase
@@ -102,11 +101,11 @@ export default async function DashboardPage() {
           trendUp
         />
         <KpiCard
-          label="Alertas de stock"
-          value={alertasStock?.length ?? 0}
-          icon="⚠️"
-          color="red"
-          trend="Requieren acción"
+          label="En Bodega (por despachar)"
+          value={pedidosBodega?.length ?? 0}
+          icon="📦"
+          color="purple"
+          trend="Pendientes de despacho"
           trendUp={false}
         />
         <KpiCard
