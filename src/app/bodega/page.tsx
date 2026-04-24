@@ -141,30 +141,46 @@ export default function BodegaPage() {
     }
     setSolicitudes(sols)
 
-    setPedEntrega((pedEnt ?? []).map((p: {
+    type PedEntRaw = {
       id: string; numero_pedido: string; estado: string; fecha_entrega_solicitada: string
-      cliente: {nombre?:string}|null
-      lineas: {cantidad:number;subtotal_linea:number;producto:{nombre?:string}|null;unidad:{simbolo?:string}|null}[]
-      ops: {id:string;estado:string;cantidad_a_producir:number;cantidad_producida:number|null;formula:{producto:{nombre?:string}|null}|null}[]
-    }) => {
-      const opsArr = p.ops ?? []
+      cliente: {nombre?:string}|{nombre?:string}[]|null
+      lineas: {
+        cantidad: number; subtotal_linea: number
+        producto: {nombre?:string}|{nombre?:string}[]|null
+        unidad: {simbolo?:string}|{simbolo?:string}[]|null
+      }[]
+      ops: {
+        id: string; estado: string; cantidad_a_producir: number; cantidad_producida: number|null
+        formula: {producto:{nombre?:string}|{nombre?:string}[]|null}|{producto:{nombre?:string}|{nombre?:string}[]|null}[]|null
+      }[]
+    }
+    setPedEntrega(((pedEnt ?? []) as unknown as PedEntRaw[]).map(p => {
+      const clienteObj = Array.isArray(p.cliente) ? p.cliente[0] : p.cliente
+      const opsArr = (p.ops ?? [])
       const todas_ops_entregadas = opsArr.length > 0 && opsArr.every(op => op.estado === 'entregada_bodega')
-      const lineasArr = (p.lineas ?? []).map(l => ({
-        producto: (l.producto as {nombre?:string}|null)?.nombre ?? '—',
-        cantidad: l.cantidad,
-        unidad: (l.unidad as {simbolo?:string}|null)?.simbolo ?? '',
-        subtotal: l.subtotal_linea ?? 0,
-      }))
-      const opsConv = opsArr.map(op => ({
-        id: op.id,
-        estado: op.estado,
-        cantidad_a_producir: op.cantidad_a_producir,
-        cantidad_producida: op.cantidad_producida,
-        producto: (op.formula as {producto:{nombre?:string}|null}|null)?.producto?.nombre ?? '—',
-      }))
+      const lineasArr = (p.lineas ?? []).map(l => {
+        const prodObj = Array.isArray(l.producto) ? l.producto[0] : l.producto
+        const unidObj = Array.isArray(l.unidad) ? l.unidad[0] : l.unidad
+        return {
+          producto: prodObj?.nombre ?? '—',
+          cantidad: l.cantidad,
+          unidad: unidObj?.simbolo ?? '',
+          subtotal: l.subtotal_linea ?? 0,
+        }
+      })
+      const opsConv = opsArr.map(op => {
+        const formulaObj = Array.isArray(op.formula) ? op.formula[0] : op.formula
+        const prodOp = Array.isArray(formulaObj?.producto) ? formulaObj?.producto[0] : formulaObj?.producto
+        return {
+          id: op.id, estado: op.estado,
+          cantidad_a_producir: op.cantidad_a_producir,
+          cantidad_producida: op.cantidad_producida,
+          producto: prodOp?.nombre ?? '—',
+        }
+      })
       return {
         id: p.id, numero_pedido: p.numero_pedido, estado: p.estado,
-        cliente: (p.cliente as {nombre?:string}|null)?.nombre ?? '—',
+        cliente: clienteObj?.nombre ?? '—',
         fecha_entrega: p.fecha_entrega_solicitada,
         lineas: lineasArr, ops: opsConv, todas_ops_entregadas,
         total: lineasArr.reduce((s, l) => s + l.subtotal, 0),
