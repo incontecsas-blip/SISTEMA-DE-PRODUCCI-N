@@ -41,6 +41,10 @@ export default function ClientesPage() {
   const [editing, setEditing]       = useState<Cliente | null>(null)
   const [form, setForm]             = useState(FORM_DEFAULT)
   const [saving, setSaving]         = useState(false)
+  const [tipoFiltro, setTipoFiltro] = useState('')
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importando, setImportando] = useState(false)
 
   const fetchClientes = useCallback(async () => {
     const q = supabase
