@@ -37,8 +37,9 @@ export default function PedidosPage() {
   const [tabActivo, setTabActivo] = useState<'todos' | 'mios' | 'confirmar'>('todos')
   const [selected, setSelected]   = useState<Pedido | null>(null)
   const [historial, setHistorial] = useState<PedidoHistorial[]>([])
-  const [showModal, setShowModal] = useState(false)
-  const [saving, setSaving]       = useState(false)
+  const [showModal, setShowModal]     = useState(false)
+  const [editingPedido, setEditingPedido] = useState<Pedido | null>(null)
+  const [saving, setSaving]           = useState(false)
 
   // Formulario nuevo pedido
   const [clienteInput, setClienteInput] = useState('')
@@ -199,6 +200,85 @@ export default function PedidosPage() {
     setObs(''); setLineas([])
   }
 
+  // Cargar datos del pedido en el formulario para editar
+  async function abrirEditarPedido(p: Pedido) {
+    if (!isAdmin) { toast.error('Solo el Administrador puede editar pedidos'); return }
+    if (['en_produccion','listo_entrega','entregado'].includes(p.estado)) {
+      toast.error('No se puede editar un pedido que ya está en Producción o fue entregado')
+      return
+    }
+    // Cargar líneas del pedido
+    const { data: lineasDB } = await supabase
+      .from('pedidos_lineas')
+      .select('*, producto:productos(id,nombre), unidad:unidades_medida(id,simbolo)')
+      .eq('pedido_id', p.id)
+
+    const lineasCargadas: Linea[] = (lineasDB ?? []).map(l => {
+      const prod = l.producto as { id: string; nombre: string } | null
+      const unid = l.unidad as { id: string; simbolo: string } | null
+      return {
+        producto_id: prod?.id ?? '',
+        producto_nombre: prod?.nombre ?? '',
+        cantidad: l.cantidad,
+        unidad_id: unid?.id ?? '',
+        precio_unitario: l.precio_unitario,
+        descuento_pct: l.descuento_pct,
+      }
+    })
+
+    const cliente = p.cliente as { nombre?: string; ruc?: string; descuento_pct?: number; tiempo_entrega_dias?: number } | null
+    setClienteInput(cliente?.nombre ?? '')
+    setClienteSel({ id: p.cliente_id, nombre: cliente?.nombre ?? '', ruc: cliente?.ruc ?? '',
+      descuento_pct: cliente?.descuento_pct ?? 0, tiempo_entrega_dias: cliente?.tiempo_entrega_dias ?? 3 } as Cliente)
+    setFechaEntrega(p.fecha_entrega_solicitada)
+    setObs(p.observaciones ?? '')
+    setLineas(lineasCargadas)
+    setEditingPedido(p)
+    setShowModal(true)
+  }
+
+  // Guardar cambios al editar pedido
+  async function handleActualizar() {
+    if (!editingPedido) return
+    if (!clienteSel) { toast.error('Selecciona un cliente'); return }
+    if (!fechaEntrega) { toast.error('Fecha de entrega requerida'); return }
+    if (lineas.length === 0) { toast.error('Agrega al menos un producto'); return }
+    setSaving(true)
+    try {
+      // Actualizar cabecera del pedido
+      const { error } = await supabase.from('pedidos').update({
+        cliente_id: clienteSel.id,
+        fecha_entrega_solicitada: fechaEntrega,
+        descuento_pct: clienteSel.descuento_pct ?? 0,
+        observaciones: observaciones || null,
+        subtotal: totalPedido,
+        total: totalPedido,
+      }).eq('id', editingPedido.id)
+      if (error) { toast.error('Error: ' + error.message); return }
+
+      // Eliminar líneas anteriores y reemplazar
+      await supabase.from('pedidos_lineas').delete().eq('pedido_id', editingPedido.id)
+      const { error: eLineas } = await supabase.from('pedidos_lineas').insert(
+        lineas.map(l => ({
+          pedido_id: editingPedido.id,
+          producto_id: l.producto_id,
+          cantidad: l.cantidad,
+          unidad_id: l.unidad_id,
+          precio_unitario: l.precio_unitario,
+          descuento_pct: l.descuento_pct,
+        }))
+      )
+      if (eLineas) { toast.error('Error en líneas: ' + eLineas.message); return }
+      toast.success(`Pedido ${editingPedido.numero_pedido} actualizado`)
+      setShowModal(false)
+      setEditingPedido(null)
+      resetForm()
+      fetchPedidos()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al actualizar')
+    } finally { setSaving(false) }
+  }
+
   // Avanzar estado — en Pedidos solo se puede confirmar (borrador→confirmado)
   // Los demás estados (en_bodega, listo_entrega, entregado) los gestiona Bodega
   async function avanzarEstado(pedido: Pedido) {
@@ -344,6 +424,12 @@ export default function PedidosPage() {
                   <td><OrderStatusPill status={p.estado} /></td>
                   <td className="flex gap-1.5">
                     <button className="btn text-xs px-2 py-1" onClick={() => verDetalle(p)}>Ver</button>
+                    {isAdmin && ['borrador','confirmado','en_bodega'].includes(p.estado) && (
+                      <button className="btn text-xs px-2 py-1 text-sky-600 hover:bg-sky-50 hover:border-sky-200"
+                        onClick={() => abrirEditarPedido(p)}>
+                        ✏ Editar
+                      </button>
+                    )}
                     {/* Solo confirmar desde pedidos — el resto lo maneja Bodega/Producción */}
                     {p.estado === 'borrador' && (
                       <button className="btn-primary text-xs px-2 py-1" onClick={() => avanzarEstado(p)}>
@@ -490,17 +576,19 @@ export default function PedidosPage() {
       {/* Modal nuevo pedido */}
       <Modal
         open={showModal}
-        onClose={() => { setShowModal(false); resetForm() }}
-        title="Nuevo Pedido"
-        subtitle="Completa los datos del pedido"
+        onClose={() => { setShowModal(false); resetForm(); setEditingPedido(null) }}
+        title={editingPedido ? `Editar Pedido ${editingPedido.numero_pedido}` : 'Nuevo Pedido'}
+        subtitle={editingPedido ? 'Solo admin puede editar. Código y estado no cambian.' : 'Completa los datos del pedido'}
         icon="📋"
         wide
         footer={
           <>
-            <button className="btn" onClick={() => { setShowModal(false); resetForm() }}>Cancelar</button>
-            <button className="btn" onClick={() => handleGuardar(false)} disabled={saving}>💾 Borrador</button>
-            <button className="btn-primary" onClick={() => handleGuardar(true)} disabled={saving}>
-              {saving ? 'Guardando...' : '✓ Crear y Confirmar'}
+            <button className="btn" onClick={() => { setShowModal(false); resetForm(); setEditingPedido(null) }}>Cancelar</button>
+            {!editingPedido && (
+              <button className="btn" onClick={() => handleGuardar(false)} disabled={saving}>💾 Borrador</button>
+            )}
+            <button className="btn-primary" onClick={() => editingPedido ? handleActualizar() : handleGuardar(true)} disabled={saving}>
+              {saving ? 'Guardando...' : editingPedido ? '✓ Guardar Cambios' : '✓ Crear y Confirmar'}
             </button>
           </>
         }

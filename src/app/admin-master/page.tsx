@@ -121,19 +121,24 @@ export default function AdminMasterPage() {
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           nombre: formUser.nombre,
           email: formUser.email,
           password: formUser.password,
           rol: formUser.rol,
-          tenant_id: currentUser?.tenant_id,
         }),
       })
+
+      const data = await res.json()
+
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.message ?? 'Error al crear usuario')
+        toast.error(data.message ?? 'Error al crear usuario')
+        setSaving(false)
+        return
       }
-      toast.success(`Usuario ${formUser.email} creado · Credenciales enviadas`)
+
+      toast.success(`✅ Usuario ${formUser.email} creado correctamente`)
       setShowNewUser(false)
       setFormUser({ nombre: '', email: '', rol: 'vendedor', password: '' })
       loadData()

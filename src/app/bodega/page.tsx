@@ -27,9 +27,20 @@ interface SolicitudDespacho {
   }[]
   todos_ok: boolean
 }
+interface PedidoEntregaLinea {
+  producto: string; cantidad: number; unidad: string; subtotal: number
+}
+interface PedidoEntregaOP {
+  id: string; estado: string; cantidad_a_producir: number
+  cantidad_producida: number | null; producto: string
+}
 interface PedidoEntrega {
   id: string; numero_pedido: string; cliente: string
   fecha_entrega: string; estado: string
+  lineas: PedidoEntregaLinea[]
+  ops: PedidoEntregaOP[]
+  todas_ops_entregadas: boolean
+  total: number
 }
 
 export default function BodegaPage() {
@@ -44,6 +55,9 @@ export default function BodegaPage() {
   const [pedidosEntrega, setPedEntrega] = useState<PedidoEntrega[]>([])
   const [loading, setLoading]           = useState(true)
   const [pedidoDetalle, setPedidoDetalle] = useState<SolicitudDespacho | null>(null)
+
+  // Modal detalle entrega
+  const [entregaDetalle, setEntregaDetalle] = useState<PedidoEntrega | null>(null)
 
   // Modal ingreso MP
   const [showIngreso, setShowIngreso] = useState(false)
@@ -68,7 +82,12 @@ export default function BodegaPage() {
               producto:productos(id, nombre), unidad:unidades_medida(simbolo))`)
           .eq('estado', 'confirmado'),
         supabase.from('pedidos')
-          .select('id, numero_pedido, estado, fecha_entrega_solicitada, cliente:clientes(nombre)')
+          .select(`id, numero_pedido, estado, fecha_entrega_solicitada,
+            cliente:clientes(nombre),
+            lineas:pedidos_lineas(cantidad, subtotal_linea,
+              producto:productos(nombre), unidad:unidades_medida(simbolo)),
+            ops:ordenes_produccion(id, estado, cantidad_a_producir, cantidad_producida,
+              formula:formulas(producto:productos(nombre)))`)
           .in('estado', ['listo_entrega', 'en_produccion'])
           .order('fecha_entrega_solicitada', { ascending: true }),
       ])
@@ -122,11 +141,35 @@ export default function BodegaPage() {
     }
     setSolicitudes(sols)
 
-    setPedEntrega((pedEnt ?? []).map(p => ({
-      id: p.id, numero_pedido: p.numero_pedido, estado: p.estado,
-      cliente: (p.cliente as {nombre?:string}|null)?.nombre ?? '—',
-      fecha_entrega: p.fecha_entrega_solicitada,
-    })))
+    setPedEntrega((pedEnt ?? []).map((p: {
+      id: string; numero_pedido: string; estado: string; fecha_entrega_solicitada: string
+      cliente: {nombre?:string}|null
+      lineas: {cantidad:number;subtotal_linea:number;producto:{nombre?:string}|null;unidad:{simbolo?:string}|null}[]
+      ops: {id:string;estado:string;cantidad_a_producir:number;cantidad_producida:number|null;formula:{producto:{nombre?:string}|null}|null}[]
+    }) => {
+      const opsArr = p.ops ?? []
+      const todas_ops_entregadas = opsArr.length > 0 && opsArr.every(op => op.estado === 'entregada_bodega')
+      const lineasArr = (p.lineas ?? []).map(l => ({
+        producto: (l.producto as {nombre?:string}|null)?.nombre ?? '—',
+        cantidad: l.cantidad,
+        unidad: (l.unidad as {simbolo?:string}|null)?.simbolo ?? '',
+        subtotal: l.subtotal_linea ?? 0,
+      }))
+      const opsConv = opsArr.map(op => ({
+        id: op.id,
+        estado: op.estado,
+        cantidad_a_producir: op.cantidad_a_producir,
+        cantidad_producida: op.cantidad_producida,
+        producto: (op.formula as {producto:{nombre?:string}|null}|null)?.producto?.nombre ?? '—',
+      }))
+      return {
+        id: p.id, numero_pedido: p.numero_pedido, estado: p.estado,
+        cliente: (p.cliente as {nombre?:string}|null)?.nombre ?? '—',
+        fecha_entrega: p.fecha_entrega_solicitada,
+        lineas: lineasArr, ops: opsConv, todas_ops_entregadas,
+        total: lineasArr.reduce((s, l) => s + l.subtotal, 0),
+      }
+    }))
     setLoading(false)
   }, [supabase])
 
@@ -351,11 +394,22 @@ export default function BodegaPage() {
                       </span>
                     </td>
                     <td className="flex gap-1.5">
+                      <button className="btn text-xs px-2 py-1"
+                        onClick={() => setEntregaDetalle(p)}>
+                        👁 Ver
+                      </button>
                       {p.estado === 'en_produccion' && (
                         <button
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-amber-500 text-white border border-amber-500 hover:bg-amber-600 transition-colors"
-                          onClick={() => marcarListoEntrega(p)}>
-                          📦 Listo para Entrega
+                          className={clsx(
+                            'inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors',
+                            p.todas_ops_entregadas
+                              ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                          )}
+                          disabled={!p.todas_ops_entregadas}
+                          title={p.todas_ops_entregadas ? '' : 'Esperar a que Producción entregue todas las OPs'}
+                          onClick={() => p.todas_ops_entregadas && marcarListoEntrega(p)}>
+                          {p.todas_ops_entregadas ? '📦 Listo para Entrega' : '⏳ En Producción...'}
                         </button>
                       )}
                       {p.estado === 'listo_entrega' && (
@@ -532,6 +586,107 @@ export default function BodegaPage() {
                 onClick={() => despachar(pedidoDetalle)}>
                 {pedidoDetalle.todos_ok ? '▶ Confirmar y Despachar a Producción' : '⚠ Despachar con stock incompleto'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL: VER DETALLE ENTREGA ══════════════════════════ */}
+      {entregaDetalle && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setEntregaDetalle(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3 sticky top-0 bg-white rounded-t-2xl">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-xl">🚚</div>
+              <div>
+                <h3 className="font-bold text-[15px]">{entregaDetalle.numero_pedido} — Detalle de Entrega</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Cliente: {entregaDetalle.cliente} · F. Entrega: {format(new Date(entregaDetalle.fecha_entrega), 'dd/MM/yyyy')}
+                </p>
+              </div>
+              <button onClick={() => setEntregaDetalle(null)}
+                className="ml-auto w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100">✕</button>
+            </div>
+            <div className="px-6 py-5 flex flex-col gap-4">
+
+              {/* Productos del pedido */}
+              <div>
+                <p className="font-mono text-[9px] tracking-widest text-slate-400 uppercase mb-2">Productos del Pedido</p>
+                <table className="data-table">
+                  <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th>Subtotal</th></tr></thead>
+                  <tbody>
+                    {entregaDetalle.lineas.map((l, i) => (
+                      <tr key={i}>
+                        <td className="font-semibold">{l.producto}</td>
+                        <td className="font-mono font-bold text-sky-600">{l.cantidad}</td>
+                        <td className="font-mono text-slate-500">{l.unidad}</td>
+                        <td className="font-mono font-semibold">${l.subtotal.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-50">
+                      <td colSpan={3} className="text-right font-bold">Total:</td>
+                      <td className="font-mono font-bold text-sky-600 text-[15px]">${entregaDetalle.total.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Estado de OPs */}
+              <div>
+                <p className="font-mono text-[9px] tracking-widest text-slate-400 uppercase mb-2">Estado de Órdenes de Producción</p>
+                <div className="flex flex-col gap-2">
+                  {entregaDetalle.ops.map((op, i) => (
+                    <div key={i} className={clsx(
+                      'flex items-center gap-3 p-3 rounded-xl border',
+                      op.estado === 'entregada_bodega' ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'
+                    )}>
+                      <span className="text-lg">{op.estado === 'entregada_bodega' ? '✅' : '⚙️'}</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">{op.producto}</p>
+                        <p className="text-xs text-slate-500">
+                          A producir: <strong>{op.cantidad_a_producir} kg</strong>
+                          {op.cantidad_producida != null && ` · Producido: ${op.cantidad_producida} kg`}
+                        </p>
+                      </div>
+                      <span className={clsx(
+                        'text-[10px] font-mono font-semibold px-2.5 py-1 rounded-full border',
+                        op.estado === 'entregada_bodega'
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                          : 'bg-sky-100 text-sky-700 border-sky-300'
+                      )}>
+                        {op.estado === 'entregada_bodega' ? '✓ Entregado a Bodega' : op.estado === 'en_proceso' ? 'En proceso' : 'Pendiente'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resumen */}
+              <div className={clsx('p-4 rounded-xl border-l-4 text-sm font-medium',
+                entregaDetalle.todas_ops_entregadas
+                  ? 'bg-emerald-50 border-l-emerald-400 text-emerald-700'
+                  : 'bg-sky-50 border-l-sky-400 text-sky-700')}>
+                {entregaDetalle.todas_ops_entregadas
+                  ? '✅ Producción completó y entregó todas las OPs. Puedes marcar como Listo para Entrega.'
+                  : '⏳ Esperando que Producción entregue todas las OPs a Bodega antes de poder despachar.'}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end sticky bottom-0 bg-white rounded-b-2xl">
+              <button className="btn" onClick={() => setEntregaDetalle(null)}>Cerrar</button>
+              {entregaDetalle.estado === 'en_produccion' && entregaDetalle.todas_ops_entregadas && (
+                <button
+                  className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white border border-amber-500 hover:bg-amber-600"
+                  onClick={() => { marcarListoEntrega(entregaDetalle); setEntregaDetalle(null) }}>
+                  📦 Marcar como Listo para Entrega
+                </button>
+              )}
+              {entregaDetalle.estado === 'listo_entrega' && (
+                <button
+                  className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-500 text-white border border-emerald-500 hover:bg-emerald-600"
+                  onClick={() => { marcarEntregado(entregaDetalle); setEntregaDetalle(null) }}>
+                  ✅ Registrar Entrega al Cliente
+                </button>
+              )}
             </div>
           </div>
         </div>
