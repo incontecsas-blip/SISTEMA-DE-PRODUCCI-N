@@ -173,14 +173,14 @@ export default async function DashboardPage() {
             <span className="font-bold text-[14px]">Alertas</span>
             <span className="text-[10px] font-mono bg-slate-100 border border-slate-200
                              text-slate-500 px-2 py-0.5 rounded-md">
-              {(alertasVenc?.length ?? 0) + (alertasStock?.length ?? 0)}
+              {(alertasVenc?.length ?? 0)}
             </span>
           </div>
           <div className="p-4 flex flex-col gap-2.5">
-            {alertasStock && alertasStock.length > 0 && (
+            {false && (
               <StockAlertItem
                 title="Productos con stock bajo"
-                subtitle={`${alertasStock.length} MP por debajo del mínimo`}
+                subtitle="—" 
                 type="danger"
               />
             )}
@@ -199,7 +199,7 @@ export default async function DashboardPage() {
                 type={a.dias_restantes <= 3 ? 'danger' : 'warning'}
               />
             ))}
-            {!alertasVenc?.length && !alertasStock?.length && (
+            {!alertasVenc?.length && (
               <p className="text-center text-slate-400 text-sm py-6">✅ Sin alertas activas</p>
             )}
           </div>
