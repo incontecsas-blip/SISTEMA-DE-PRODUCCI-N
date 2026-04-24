@@ -9,6 +9,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
+import { downloadCsv, downloadHtmlPdf } from '@/lib/download'
 
 type ReporteId = 'pedidos' | 'produccion' | 'trazabilidad' | 'inventario'
 
@@ -42,67 +43,7 @@ interface TrazaRow {
   historial?: { estado: string; fecha: string; usuario: string }[]
 }
 
-// ── Helpers de exportación ─────────────────────────────────────
-
-function escapeCsv(val: unknown): string {
-  const str = val === null || val === undefined ? '' : String(val)
-  if (str.includes(',') || str.includes('"') || str.includes('\n'))
-    return `"${str.replace(/"/g, '""')}"`
-  return str
-}
-
-function buildCsvRows(headers: string[], rows: (string | number | null | undefined)[][]): string {
-  const lines = [headers.map(escapeCsv).join(',')]
-  rows.forEach(row => lines.push(row.map(escapeCsv).join(',')))
-  return lines.join('\n')
-}
-
-function downloadCsv(content: string, filename: string) {
-  const bom = '\uFEFF' // UTF-8 BOM para que Excel lo abra correctamente
-  const blob = new Blob([bom + content], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function buildHtmlTable(title: string, subtitle: string, headers: string[], rows: (string | number | null | undefined)[][]): string {
-  const headerRow = headers.map(h => `<th>${h}</th>`).join('')
-  const bodyRows = rows.map(row =>
-    `<tr>${row.map(cell => `<td>${cell ?? '—'}</td>`).join('')}</tr>`
-  ).join('')
-
-  return `<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8">
-<title>${title}</title>
-<style>
-  body { font-family: Arial, sans-serif; font-size: 11px; margin: 20px; color: #1e293b; }
-  h1 { font-size: 16px; margin-bottom: 4px; }
-  p.sub { color: #64748b; font-size: 10px; margin-bottom: 16px; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #0ea5e9; color: white; padding: 6px 8px; text-align: left; font-size: 10px; }
-  td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
-  tr:nth-child(even) { background: #f8fafc; }
-  .footer { margin-top: 20px; color: #94a3b8; font-size: 9px; }
-</style></head><body>
-<h1>${title}</h1>
-<p class="sub">${subtitle}</p>
-<table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>
-<p class="footer">Generado el ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })} · Sistema de Producción</p>
-</body></html>`
-}
-
-function downloadHtml(html: string, filename: string) {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
+// ── Helpers locales de formato ────────────────────────────────
 
 // ── Componente principal ───────────────────────────────────────
 export default function ReportesPage() {
@@ -254,11 +195,10 @@ export default function ReportesPage() {
         Number(p.subtotal).toFixed(2),
         Number(p.total).toFixed(2),
       ])
-      const csv = buildCsvRows(
+      downloadCsv(
         ['Pedido','F. Pedido','F. Entrega','Cliente','RUC','Vendedor','Estado','Desc. %','Subtotal','Total'],
-        rows
+        rows, `pedidos_${slug}.csv`
       )
-      downloadCsv(csv, `pedidos_${slug}.csv`)
 
     } else if (reporte === 'produccion') {
       const rows = (datos as ProduccionRow[]).map(op => {
@@ -277,11 +217,10 @@ export default function ReportesPage() {
           maxMerma.toFixed(1) + '%',
         ]
       })
-      const csv = buildCsvRows(
+      downloadCsv(
         ['OP #','Fecha','Producto','Fórmula','Responsable','Estado','Cant. Programada','Cant. Producida','Merma máx.'],
-        rows
+        rows, `produccion_${slug}.csv`
       )
-      downloadCsv(csv, `produccion_${slug}.csv`)
 
     } else if (reporte === 'inventario') {
       const rows = (datos as InventarioRow[]).map(p => {
@@ -298,11 +237,10 @@ export default function ReportesPage() {
       })
       const totalValor = (datos as InventarioRow[]).reduce((s, p) => s + p.stock_actual * p.costo_unitario, 0)
       rows.push(['', 'TOTAL VALORIZADO', '', '', '', '', '', '', totalValor.toFixed(2), '', ''])
-      const csv = buildCsvRows(
+      downloadCsv(
         ['Código','Nombre','Tipo','Unidad','Stock Actual','Stock Mín.','Stock Máx.','Costo Unit.','Valor Total','Caducidad días','Estado'],
-        rows
+        rows, `inventario_${slug}.csv`
       )
-      downloadCsv(csv, `inventario_${slug}.csv`)
 
     } else if (reporte === 'trazabilidad' && trazaDatos) {
       const rows = trazaDatos.map(r => [
@@ -310,11 +248,11 @@ export default function ReportesPage() {
         r.cliente ?? r.producto ?? '—',
         r.lineas?.map(l => `${l.cantidad} ${l.producto}`).join(' | ') ?? '—',
       ])
-      const csv = buildCsvRows(['Tipo','Número','Estado','Fecha','Cliente/Producto','Líneas'], rows)
-      downloadCsv(csv, `trazabilidad_${term}.csv`.replace(/\s/g, '_'))
+      downloadCsv(['Tipo','Número','Estado','Fecha','Cliente/Producto','Líneas'], rows,
+        `trazabilidad_${term}.csv`.replace(/\s/g, '_'))
     }
 
-    toast.success('Excel descargado — ábrelo con Excel o Google Sheets')
+    toast.success('✅ Excel descargado')
   }
 
   // ── Exportar PDF (HTML imprimible) ────────────────────────────
@@ -332,9 +270,10 @@ export default function ReportesPage() {
         p.estado,
         '$' + Number(p.total).toFixed(2),
       ])
-      const html = buildHtmlTable('Reporte de Pedidos', fechaStr,
-        ['Pedido','Fecha','Cliente','Vendedor','Estado','Total'], rows)
-      downloadHtml(html, `pedidos_${slug}.html`)
+      downloadHtmlPdf('Reporte de Pedidos', fechaStr,
+        ['Pedido','Fecha','Cliente','Vendedor','Estado','Total'], rows,
+        `pedidos_${slug}.html`,
+        `Total: $${(datos as PedidoRow[]).reduce((s, p) => s + Number(p.total), 0).toFixed(2)}`)
 
     } else if (reporte === 'produccion') {
       const rows = (datos as ProduccionRow[]).map(op => {
@@ -354,9 +293,9 @@ export default function ReportesPage() {
           maxMerma.toFixed(1) + '%',
         ]
       })
-      const html = buildHtmlTable('Reporte de Producción', fechaStr,
-        ['OP #','Fecha','Producto','Responsable','Estado','Programado','Producido','Merma máx.'], rows)
-      downloadHtml(html, `produccion_${slug}.html`)
+      downloadHtmlPdf('Reporte de Producción', fechaStr,
+        ['OP #','Fecha','Producto','Responsable','Estado','Programado','Producido','Merma máx.'], rows,
+        `produccion_${slug}.html`)
 
     } else if (reporte === 'inventario') {
       const rows = (datos as InventarioRow[]).map(p => {
@@ -373,9 +312,11 @@ export default function ReportesPage() {
       })
       const total = (datos as InventarioRow[]).reduce((s, p) => s + p.stock_actual * p.costo_unitario, 0)
       rows.push(['', 'TOTAL', '', '', '', '', '', '$' + total.toFixed(2)])
-      const html = buildHtmlTable('Inventario Valorizado', format(new Date(), 'dd/MM/yyyy'),
-        ['Código','Nombre','Tipo','Unidad','Stock','Mín.','Costo Unit.','Valor Total'], rows)
-      downloadHtml(html, `inventario_${slug}.html`)
+      const totalInv = (datos as InventarioRow[]).reduce((s, p) => s + p.stock_actual * p.costo_unitario, 0)
+      downloadHtmlPdf('Inventario Valorizado', format(new Date(), 'dd/MM/yyyy'),
+        ['Código','Nombre','Tipo','Unidad','Stock','Mín.','Costo Unit.','Valor Total'], rows,
+        `inventario_${slug}.html`,
+        `Valor total: $${totalInv.toFixed(2)}`)
 
     } else if (reporte === 'trazabilidad' && trazaDatos) {
       const rows = trazaDatos.map(r => [
@@ -383,12 +324,12 @@ export default function ReportesPage() {
         format(new Date(r.fecha), 'dd/MM/yyyy'),
         r.cliente ?? r.producto ?? '—',
       ])
-      const html = buildHtmlTable(`Trazabilidad: ${busqLote}`, format(new Date(), 'dd/MM/yyyy'),
-        ['Tipo','Número','Estado','Fecha','Cliente/Producto'], rows)
-      downloadHtml(html, `trazabilidad_${busqLote.replace(/\s/g, '_')}.html`)
+      downloadHtmlPdf(`Trazabilidad: ${busqLote}`, format(new Date(), 'dd/MM/yyyy'),
+        ['Tipo','Número','Estado','Fecha','Cliente/Producto'], rows,
+        `trazabilidad_${busqLote.replace(/\s/g, '_')}.html`)
     }
 
-    toast.success('Archivo HTML descargado — ábrelo en Chrome y usa Ctrl+P para imprimir como PDF')
+    toast.success('✅ PDF abierto en nueva pestaña — usa Ctrl+P para guardar como PDF')
   }
 
   // ── RENDER ────────────────────────────────────────────────────
