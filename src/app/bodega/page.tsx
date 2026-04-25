@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import type { Producto, Lote } from '@/types/database'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { downloadCsv, downloadHtmlPdf } from '@/lib/download'
 import clsx from 'clsx'
 
 type Tab = 'despacho' | 'entrega' | 'inventario' | 'lotes'

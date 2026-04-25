@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import type { OrdenProduccion, OpConsumo } from '@/types/database'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { downloadHtmlPdf } from '@/lib/download'
 import clsx from 'clsx'
 
 // ── tipos locales ──────────────────────────────────────────────
@@ -59,7 +60,7 @@ export default function ProduccionPage() {
   const fetchOPs = useCallback(async () => {
     let q = supabase
       .from('ordenes_produccion')
-      .select('*, pedido:pedidos(numero_pedido), responsable:users(nombre), formula:formulas(version, producto:productos(nombre))')
+      .select('*, pedido:pedidos(numero_pedido,fecha_entrega_solicitada), responsable:users(nombre), formula:formulas(version, producto:productos(nombre))')
       .order('created_at', { ascending: false })
 
     if (role === 'operario') q = q.eq('responsable_id', user?.id ?? '')
@@ -253,6 +254,37 @@ export default function ProduccionPage() {
     }
   }
 
+  // ── PDF de una OP con consumos ────────────────────────────────
+  function exportarPdfOP(op: OrdenProduccion, consumosData: ConsumoRow[]) {
+    const formula = op.formula as {version?:number;producto?:{nombre?:string}}|null
+    const prodNombre = (Array.isArray(formula?.producto)
+      ? (formula?.producto as {nombre?:string}[])[0]?.nombre
+      : (formula?.producto as {nombre?:string}|null)?.nombre) ?? '—'
+    const resp = op.responsable as {nombre?:string}|null
+
+    const rows = consumosData.map(c => {
+      const real = c.cantidad_real ?? 0
+      const merma = c.cantidad_teorica > 0 ? ((real - c.cantidad_teorica) / c.cantidad_teorica * 100) : 0
+      return [
+        c.mp_nombre,
+        c.mp_codigo,
+        c.cantidad_teorica.toFixed(4) + ' ' + c.unidad,
+        c.cantidad_real != null ? c.cantidad_real.toFixed(4) + ' ' + c.unidad : '—',
+        c.cantidad_real != null ? merma.toFixed(1) + '%' : '—',
+        c.cantidad_real != null ? (merma <= mermaParam ? '✓ OK' : '⚠ Alto') : '—',
+      ]
+    })
+
+    downloadHtmlPdf(
+      `OP ${op.numero_op} — Consumos`,
+      `Producto: ${prodNombre} · Cantidad: ${op.cantidad_a_producir} kg · Responsable: ${resp?.nombre ?? '—'} · Fórmula v${formula?.version ?? '—'}`,
+      ['Materia Prima','Código','Cant. Teórica','Cant. Real','% Merma','Estado'],
+      rows,
+      `op_${op.numero_op}.html`,
+      `Merma aceptable: ${mermaParam}%`
+    )
+  }
+
   if (loading) {
     return (
       <AppLayout title="Producción" breadcrumb="MÓDULOS / PRODUCCIÓN">
@@ -322,7 +354,17 @@ export default function ProduccionPage() {
                       <td className="font-mono">{op.cantidad_a_producir} kg</td>
                       <td className="text-slate-500 text-xs">{resp?.nombre ?? '—'}</td>
                       <td className="font-mono text-xs text-slate-500">
-                        {op.fecha_inicio ? format(new Date(op.fecha_inicio), 'dd/MM HH:mm') : '—'}
+                        {op.created_at ? (
+                          <div>
+                            <div>{format(new Date(op.created_at), 'dd/MM/yy')}</div>
+                            <div className="text-[10px] text-slate-400">{format(new Date(op.created_at), 'HH:mm')}</div>
+                          </div>
+                        ) : '—'}
+                      </td>
+                      <td className="font-mono text-xs text-slate-500">
+                        {(op.pedido as {fecha_entrega_solicitada?:string}|null)?.fecha_entrega_solicitada
+                          ? format(new Date((op.pedido as {fecha_entrega_solicitada:string}).fecha_entrega_solicitada), 'dd/MM/yy')
+                          : '—'}
                       </td>
                       <td><OpStatusPill status={op.estado} /></td>
                       <td className="flex gap-1.5">
@@ -382,9 +424,9 @@ export default function ProduccionPage() {
             <div className="ml-auto flex gap-2">
               <button
                 className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors"
-                onClick={() => toast.success('PDF generado')}
+                onClick={() => opActiva && exportarPdfOP(opActiva, consumos)}
               >
-                ⬇ PDF OP
+                📄 PDF OP
               </button>
               <button
                 className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors"

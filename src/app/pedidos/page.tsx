@@ -379,7 +379,7 @@ export default function PedidosPage() {
       const vend = p.vendedor as {nombre?:string}|null
       return [
         p.numero_pedido,
-        p.fecha_pedido,
+        format(new Date(p.created_at), 'dd/MM/yyyy HH:mm'),
         p.fecha_entrega_solicitada,
         cli?.nombre ?? '—',
         cli?.ruc ?? '—',
@@ -391,7 +391,7 @@ export default function PedidosPage() {
       ]
     })
     downloadCsv(
-      ['Pedido','F. Pedido','F. Entrega','Cliente','RUC','Vendedor','Estado','Desc %','Subtotal','Total'],
+      ['Pedido','Fecha y Hora Pedido','F. Entrega','Cliente','RUC','Vendedor','Estado','Desc %','Subtotal','Total'],
       rows, `pedidos_${new Date().toISOString().split('T')[0]}.csv`
     )
     toast.success('✅ Excel descargado')
@@ -463,14 +463,18 @@ export default function PedidosPage() {
           ? <EmptyState icon="📋" title="Sin pedidos" action={<button className="btn-primary" onClick={() => setShowModal(true)}>+ Crear pedido</button>} />
           : (
           <table className="data-table">
-            <thead><tr><th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>F. Entrega</th><th>Total</th><th>Estado</th><th>Acc.</th></tr></thead>
+            <thead><tr><th>Pedido</th><th>Fecha y Hora</th><th>Cliente</th><th>Vendedor</th><th>F. Entrega</th><th>Total</th><th>Estado</th><th>Acc.</th></tr></thead>
             <tbody>
               {pedidos.map(p => (
                 <tr key={p.id}>
                   <td className="font-mono font-bold text-sky-600">{p.numero_pedido}</td>
+                  <td className="font-mono text-xs text-slate-500">
+                    <div>{format(new Date(p.created_at), 'dd/MM/yy')}</div>
+                    <div className="text-[10px] text-slate-400">{format(new Date(p.created_at), 'HH:mm')}</div>
+                  </td>
                   <td className="font-semibold">{(p.cliente as { nombre?: string })?.nombre ?? '—'}</td>
                   <td className="text-slate-500 text-xs">{(p.vendedor as { nombre?: string })?.nombre ?? '—'}</td>
-                  <td className="font-mono text-xs text-slate-500">{format(new Date(p.fecha_entrega_solicitada), 'dd/MM/yy')}</td>
+                  <td className="font-mono text-xs text-slate-500">{format(new Date(p.fecha_entrega_solicitada), 'dd/MM/yyyy')}</td>
                   <td className="font-mono font-semibold">${Number(p.total).toFixed(2)}</td>
                   <td><OrderStatusPill status={p.estado} /></td>
                   <td className="flex gap-1.5">
