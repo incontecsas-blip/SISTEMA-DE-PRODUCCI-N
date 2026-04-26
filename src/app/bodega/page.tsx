@@ -77,7 +77,7 @@ export default function BodegaPage() {
         supabase.from('productos').select('*, unidad:unidades_medida(simbolo)').eq('activo', true).order('nombre'),
         supabase.from('lotes').select('*, producto:productos(nombre,codigo,tipo)').eq('activo', true).order('fecha_vencimiento', { ascending: true }),
         supabase.from('pedidos')
-          .select(`id, numero_pedido, fecha_entrega_solicitada,
+          .select(`id, numero_pedido, fecha_entrega_solicitada, created_at,
             cliente:clientes(nombre),
             lineas:pedidos_lineas(cantidad, precio_unitario, descuento_pct, subtotal_linea,
               producto:productos(id, nombre), unidad:unidades_medida(simbolo))`)
@@ -138,7 +138,9 @@ export default function BodegaPage() {
       }
       sols.push({ pedido_id: ped.id, numero_pedido: ped.numero_pedido,
         cliente: (ped.cliente as {nombre?:string}|null)?.nombre ?? '—',
-        fecha_entrega: ped.fecha_entrega_solicitada, lineas: lineasConIng, todos_ok })
+        fecha_entrega: ped.fecha_entrega_solicitada,
+        fecha_pedido: (ped as {created_at?:string}).created_at ?? '',
+        lineas: lineasConIng, todos_ok })
     }
     setSolicitudes(sols)
 
@@ -393,13 +395,22 @@ export default function BodegaPage() {
             ? <EmptyState icon="🚚" title="Sin pedidos listos para entrega" subtitle="Aparecen aquí cuando Producción finaliza las OPs" />
             : (
             <table className="data-table">
-              <thead><tr><th>Pedido</th><th>Cliente</th><th>F. Entrega</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <thead><tr><th>Pedido</th><th>Cliente</th><th>F. Pedido Entrega</th><th>F. Entrega Real</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
                 {pedidosEntrega.map(p => (
                   <tr key={p.id}>
                     <td className="font-mono font-bold text-sky-600">{p.numero_pedido}</td>
                     <td className="font-semibold">{p.cliente}</td>
-                    <td className="font-mono text-xs text-slate-500">{format(new Date(p.fecha_entrega), 'dd/MM/yy')}</td>
+                    <td className="font-mono text-xs text-slate-500">
+                      <div>{format(new Date(p.fecha_entrega), 'dd/MM/yyyy')}</div>
+                    </td>
+                    <td className="font-mono text-xs text-slate-500">
+                      {p.estado === 'entregado' ? (
+                        <span className="text-emerald-600 font-semibold text-[10px]">✓ Hoy</span>
+                      ) : (
+                        <span className="text-slate-400">Pendiente</span>
+                      )}
+                    </td>
                     <td>
                       <span className={clsx('inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border',
                         p.estado === 'en_produccion' ? 'bg-sky-50 text-sky-700 border-sky-200'

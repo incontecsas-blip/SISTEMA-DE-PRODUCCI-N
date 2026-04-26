@@ -68,7 +68,10 @@ export default function PedidosPage() {
       .neq('estado', 'anulado')
       .order('created_at', { ascending: false })
 
-    if (tabActivo === 'mios')      q = q.eq('vendedor_id', user?.id ?? '')
+    // Vendedor solo ve sus propios pedidos siempre
+    if (role === 'vendedor') q = q.eq('vendedor_id', user?.id ?? '')
+    else if (tabActivo === 'mios') q = q.eq('vendedor_id', user?.id ?? '')
+
     if (tabActivo === 'confirmar') q = q.eq('estado', 'borrador')
 
     const { data, error } = await q
@@ -433,10 +436,10 @@ export default function PedidosPage() {
       {/* Tabs */}
       <div className="flex gap-0.5 bg-slate-100 border border-slate-200 rounded-xl p-1 w-fit mb-4">
         {[
-          { id: 'todos', label: 'Todos' },
-          { id: 'mios', label: 'Mis Pedidos' },
-          { id: 'confirmar', label: 'Por Confirmar' },
-        ].map(t => (
+          { id: 'todos', label: 'Todos', roles: ['master','admin','bodega'] },
+          { id: 'mios', label: 'Mis Pedidos', roles: ['master','admin','vendedor'] },
+          { id: 'confirmar', label: 'Por Confirmar', roles: ['master','admin'] },
+        ].filter(t => !role || t.roles.includes(role)).map(t => (
           <button
             key={t.id}
             onClick={() => setTabActivo(t.id as typeof tabActivo)}

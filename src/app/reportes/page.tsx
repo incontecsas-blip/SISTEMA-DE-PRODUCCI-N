@@ -56,12 +56,14 @@ export default function ReportesPage() {
   const [cargando, setCargando] = useState(false)
   const [busqLote, setBusqLote] = useState('')
   const [trazaDatos, setTrazaDatos] = useState<TrazaRow[] | null>(null)
+  const [busqTabla, setBusqTabla]   = useState('') // buscador en tabla de resultados
 
   // ── Generar reporte ──────────────────────────────────────────
   const generarReporte = useCallback(async () => {
     setCargando(true)
     setDatos([])
     setTrazaDatos(null)
+    setBusqTabla('')
     try {
       if (reporte === 'pedidos') {
         const { data, error } = await supabase
@@ -392,7 +394,22 @@ export default function ReportesPage() {
           </>
         )}
 
-        {/* Botones de exportación — siempre visibles cuando hay datos */}
+        {/* Buscador en tabla de resultados */}
+        {hayDatos && reporte !== 'trazabilidad' && (
+          <div className="flex items-center gap-2 ml-4">
+            <input
+              className="input w-52 text-xs"
+              placeholder="🔍 Buscar en resultados..."
+              value={busqTabla}
+              onChange={e => setBusqTabla(e.target.value)}
+            />
+            {busqTabla && (
+              <button className="btn text-xs px-2" onClick={() => setBusqTabla('')}>✕</button>
+            )}
+          </div>
+        )}
+
+        {/* Botones de exportación */}
         {hayDatos && (
           <div className="ml-auto flex gap-2">
             <button className="btn text-xs flex items-center gap-1.5" onClick={exportarExcel}>
@@ -402,7 +419,9 @@ export default function ReportesPage() {
               📄 Descargar PDF
             </button>
             <span className="text-xs text-slate-400 self-center">
-              {datos.length || trazaDatos?.length} registros
+              {busqTabla
+                ? `${(datos as {[k:string]:unknown}[]).filter(d => JSON.stringify(d).toLowerCase().includes(busqTabla.toLowerCase())).length} de ${datos.length || trazaDatos?.length}`
+                : `${datos.length || trazaDatos?.length} registros`}
             </span>
           </div>
         )}
@@ -425,7 +444,9 @@ export default function ReportesPage() {
               <tr><th>Pedido</th><th>F. Pedido</th><th>Cliente</th><th>RUC</th><th>Vendedor</th><th>F. Entrega</th><th>Desc.</th><th>Subtotal</th><th>Total</th><th>Estado</th></tr>
             </thead>
             <tbody>
-              {(datos as PedidoRow[]).map(p => (
+              {(datos as PedidoRow[]).filter(p =>
+                !busqTabla || JSON.stringify(p).toLowerCase().includes(busqTabla.toLowerCase())
+              ).map(p => (
                 <tr key={p.id}>
                   <td className="font-mono font-bold text-sky-600">{p.numero_pedido}</td>
                   <td className="font-mono text-xs">{format(new Date(p.fecha_pedido), 'dd/MM/yy')}</td>
@@ -454,7 +475,9 @@ export default function ReportesPage() {
           <table className="data-table">
             <thead><tr><th>OP #</th><th>Fecha</th><th>Producto</th><th>Fórmula</th><th>Responsable</th><th>Estado</th><th>Programado</th><th>Producido</th><th>Merma máx.</th></tr></thead>
             <tbody>
-              {(datos as ProduccionRow[]).map((op, i) => {
+              {(datos as ProduccionRow[]).filter(op =>
+                !busqTabla || JSON.stringify(op).toLowerCase().includes(busqTabla.toLowerCase())
+              ).map((op, i) => {
                 const f = op.formula as {version?:number;producto?:{nombre?:string}|{nombre?:string}[]}|null
                 const prodNombre = Array.isArray(f?.producto)
                   ? (f?.producto as {nombre?:string}[])[0]?.nombre
@@ -496,7 +519,9 @@ export default function ReportesPage() {
           <table className="data-table">
             <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Stock Actual</th><th>Stock Mín.</th><th>Stock Máx.</th><th>Costo Unit.</th><th>Valor Total</th><th>Estado</th></tr></thead>
             <tbody>
-              {(datos as InventarioRow[]).map((p, i) => {
+              {(datos as InventarioRow[]).filter(p =>
+                !busqTabla || JSON.stringify(p).toLowerCase().includes(busqTabla.toLowerCase())
+              ).map((p, i) => {
                 const unid = Array.isArray(p.unidad)
                   ? (p.unidad as {simbolo?:string}[])[0]?.simbolo
                   : (p.unidad as {simbolo?:string}|null)?.simbolo

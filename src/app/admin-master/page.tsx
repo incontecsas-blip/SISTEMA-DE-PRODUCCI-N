@@ -394,7 +394,35 @@ export default function AdminMasterPage() {
             <input className="input" type="password" value={formUser.password} onChange={e => setFormUser(f => ({...f,password:e.target.value}))} placeholder="••••••••" />
           </Field>
         </div>
-        <InfoBox>📧 El usuario podrá iniciar sesión con estas credenciales.</InfoBox>
+        {/* Módulos accesibles según rol seleccionado */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+          <p className="text-xs font-semibold text-slate-600 mb-2">Módulos que tendrá habilitados:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { modulo: 'Dashboard',      roles: ['master','admin','vendedor','bodega','operario'] },
+              { modulo: 'Clientes',       roles: ['master','admin','vendedor'] },
+              { modulo: 'Pedidos',        roles: ['master','admin','vendedor','bodega'] },
+              { modulo: 'Bodega',         roles: ['master','admin','bodega'] },
+              { modulo: 'Producción',     roles: ['master','admin','operario','bodega'] },
+              { modulo: 'Fórmulas',       roles: ['master','admin'] },
+              { modulo: 'Reportes',       roles: ['master','admin'] },
+              { modulo: 'Configuración',  roles: ['master','admin'] },
+            ].map(({ modulo, roles }) => {
+              const tiene = roles.includes(formUser.rol)
+              return (
+                <span key={modulo} className={clsx(
+                  'text-[10px] font-mono font-semibold px-2 py-1 rounded-lg border',
+                  tiene
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-400 border-slate-200'
+                )}>
+                  {tiene ? '✓' : '—'} {modulo}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+        <InfoBox>📧 El usuario podrá iniciar sesión con estas credenciales inmediatamente.</InfoBox>
       </Modal>
 
       {/* ── Modal EDITAR usuario ───────────────────────────── */}
@@ -432,7 +460,37 @@ export default function AdminMasterPage() {
           </Field>
         </div>
         <InfoBox>💡 Solo cambia los campos que necesitas modificar. El email no se puede editar.</InfoBox>
-        <div className="text-xs text-slate-500">Email actual: <strong>{editingUser?.email}</strong></div>
+        <div className="text-xs text-slate-500 mb-2">Email actual: <strong>{editingUser?.email}</strong></div>
+
+        {/* Módulos accesibles según el rol */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+          <p className="text-xs font-semibold text-slate-600 mb-2">Módulos habilitados según el rol seleccionado:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { modulo: 'Dashboard',      roles: ['master','admin','vendedor','bodega','operario'] },
+              { modulo: 'Clientes',       roles: ['master','admin','vendedor'] },
+              { modulo: 'Pedidos',        roles: ['master','admin','vendedor','bodega'] },
+              { modulo: 'Bodega',         roles: ['master','admin','bodega'] },
+              { modulo: 'Producción',     roles: ['master','admin','operario','bodega'] },
+              { modulo: 'Fórmulas',       roles: ['master','admin'] },
+              { modulo: 'Reportes',       roles: ['master','admin'] },
+              { modulo: 'Configuración',  roles: ['master','admin'] },
+              { modulo: 'Admin Master',   roles: ['master'] },
+            ].map(({ modulo, roles }) => {
+              const tiene = roles.includes(formEdit.rol)
+              return (
+                <span key={modulo} className={clsx(
+                  'text-[10px] font-mono font-semibold px-2 py-1 rounded-lg border',
+                  tiene
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-400 border-slate-200 line-through'
+                )}>
+                  {tiene ? '✓' : '✗'} {modulo}
+                </span>
+              )
+            })}
+          </div>
+        </div>
       </Modal>
     </AppLayout>
   )

@@ -60,7 +60,7 @@ export default function ProduccionPage() {
   const fetchOPs = useCallback(async () => {
     let q = supabase
       .from('ordenes_produccion')
-      .select('*, pedido:pedidos(numero_pedido,fecha_entrega_solicitada), responsable:users(nombre), formula:formulas(version, producto:productos(nombre))')
+      .select('*, pedido:pedidos(numero_pedido,fecha_entrega_solicitada,created_at), responsable:users(nombre), formula:formulas(version, producto:productos(nombre))')
       .order('created_at', { ascending: false })
 
     if (role === 'operario') q = q.eq('responsable_id', user?.id ?? '')
@@ -366,7 +366,32 @@ export default function ProduccionPage() {
                           ? format(new Date((op.pedido as {fecha_entrega_solicitada:string}).fecha_entrega_solicitada), 'dd/MM/yy')
                           : '—'}
                       </td>
-                      <td><OpStatusPill status={op.estado} /></td>
+                      <td className="font-mono text-xs text-slate-500">
+                        {op.estado === 'entregada_bodega' && op.fecha_fin ? (
+                          <div>
+                            <div>{format(new Date(op.fecha_fin), 'dd/MM/yy')}</div>
+                            <div className="text-[10px] text-slate-400">{format(new Date(op.fecha_fin), 'HH:mm')}</div>
+                          </div>
+                        ) : op.estado === 'en_proceso' ? (
+                          <span className="text-[10px] text-sky-600 font-semibold">En curso...</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="font-mono text-xs">
+                        {op.fecha_inicio && op.fecha_fin ? (() => {
+                          const mins = Math.round((new Date(op.fecha_fin).getTime() - new Date(op.fecha_inicio).getTime()) / 60000)
+                          if (mins < 60) return <span className="text-emerald-600 font-bold">{mins} min</span>
+                          const hrs = Math.floor(mins / 60)
+                          const min = mins % 60
+                          return <span className="text-emerald-600 font-bold">{hrs}h {min}m</span>
+                        })() : op.estado === 'en_proceso' && op.fecha_inicio ? (() => {
+                          const mins = Math.round((Date.now() - new Date(op.fecha_inicio).getTime()) / 60000)
+                          const hrs = Math.floor(mins / 60)
+                          const min = mins % 60
+                          return <span className="text-sky-500 font-semibold">{hrs > 0 ? `${hrs}h ` : ''}{min}m ⏱</span>
+                        })() : <span className="text-slate-300">—</span>}
+                      </td>
                       <td className="flex gap-1.5">
                         <button
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors"
