@@ -149,7 +149,6 @@ export default function BodegaPage() {
       id: string; numero_pedido: string; estado: string
       fecha_entrega_solicitada: string; hora_entrega_solicitada: string | null
       cliente: {nombre?:string}|{nombre?:string}[]|null
-      cliente: {nombre?:string}|{nombre?:string}[]|null
       lineas: {
         cantidad: number; subtotal_linea: number
         producto: {nombre?:string}|{nombre?:string}[]|null
