@@ -101,7 +101,7 @@ export default function BodegaPage() {
     // Construir solicitudes con ingredientes calculados
     const sols: SolicitudDespacho[] = []
     for (const ped of (peds ?? []) as unknown as {
-      id: string; numero_pedido: string; fecha_entrega_solicitada: string
+      id: string; numero_pedido: string; fecha_entrega_solicitada: string; created_at: string
       cliente: { nombre?: string } | null
       lineas: { cantidad: number; precio_unitario: number; descuento_pct: number; subtotal_linea: number
         producto: { id: string; nombre: string } | null; unidad: { simbolo: string } | null }[]
