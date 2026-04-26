@@ -146,7 +146,9 @@ export default function BodegaPage() {
     setSolicitudes(sols)
 
     type PedEntRaw = {
-      id: string; numero_pedido: string; estado: string; fecha_entrega_solicitada: string; hora_entrega_solicitada: string | null
+      id: string; numero_pedido: string; estado: string
+      fecha_entrega_solicitada: string; hora_entrega_solicitada: string | null
+      cliente: {nombre?:string}|{nombre?:string}[]|null
       cliente: {nombre?:string}|{nombre?:string}[]|null
       lineas: {
         cantidad: number; subtotal_linea: number
@@ -186,6 +188,7 @@ export default function BodegaPage() {
         id: p.id, numero_pedido: p.numero_pedido, estado: p.estado,
         cliente: clienteObj?.nombre ?? '—',
         fecha_entrega: p.fecha_entrega_solicitada,
+        hora_entrega: p.hora_entrega_solicitada ?? '',
         lineas: lineasArr, ops: opsConv, todas_ops_entregadas,
         total: lineasArr.reduce((s, l) => s + l.subtotal, 0),
       }
