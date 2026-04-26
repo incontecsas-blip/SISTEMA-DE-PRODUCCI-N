@@ -20,7 +20,7 @@ interface IngredienteReq {
   unidad: string; qty_teorica: number; stock_actual: number; stock_ok: boolean
 }
 interface SolicitudDespacho {
-  pedido_id: string; numero_pedido: string; cliente: string; fecha_entrega: string
+  pedido_id: string; numero_pedido: string; cliente: string; fecha_entrega: string; fecha_pedido: string
   lineas: {
     producto: string; cantidad: number; unidad: string
     precio_unitario: number; descuento_pct: number; subtotal: number
@@ -139,7 +139,7 @@ export default function BodegaPage() {
       sols.push({ pedido_id: ped.id, numero_pedido: ped.numero_pedido,
         cliente: (ped.cliente as {nombre?:string}|null)?.nombre ?? '—',
         fecha_entrega: ped.fecha_entrega_solicitada,
-        fecha_pedido: (ped as {created_at?:string}).created_at ?? '',
+        fecha_pedido: ped.created_at ?? '',
         lineas: lineasConIng, todos_ok })
     }
     setSolicitudes(sols)
