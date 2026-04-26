@@ -47,6 +47,7 @@ export default function PedidosPage() {
   const [clienteSugg, setClienteSugg]   = useState<Cliente[]>([])
   const [clienteSel, setClienteSel]     = useState<Cliente | null>(null)
   const [fechaEntrega, setFechaEntrega] = useState('')
+  const [horaEntrega, setHoraEntrega]   = useState('08:00')
   const [observaciones, setObs]         = useState('')
   const [lineas, setLineas]             = useState<Linea[]>([])
   const [productos, setProductos]       = useState<Producto[]>([])
@@ -154,6 +155,7 @@ export default function PedidosPage() {
           estado,
           fecha_pedido: new Date().toISOString().split('T')[0],
           fecha_entrega_solicitada: fechaEntrega,
+          hora_entrega_solicitada: horaEntrega || null,
           descuento_pct: clienteSel.descuento_pct ?? 0,
           subtotal: totalPedido,
           total: totalPedido,
@@ -201,7 +203,7 @@ export default function PedidosPage() {
 
   function resetForm() {
     setClienteInput(''); setClienteSel(null); setFechaEntrega('')
-    setObs(''); setLineas([])
+    setHoraEntrega('08:00'); setObs(''); setLineas([])
   }
 
   // Cargar datos del pedido en el formulario para editar
@@ -235,6 +237,7 @@ export default function PedidosPage() {
     setClienteSel({ id: p.cliente_id, nombre: cliente?.nombre ?? '', ruc: cliente?.ruc ?? '',
       descuento_pct: cliente?.descuento_pct ?? 0, tiempo_entrega_dias: cliente?.tiempo_entrega_dias ?? 3 } as Cliente)
     setFechaEntrega(p.fecha_entrega_solicitada)
+    setHoraEntrega((p as {hora_entrega_solicitada?:string}).hora_entrega_solicitada ?? '08:00')
     setObs(p.observaciones ?? '')
     setLineas(lineasCargadas)
     setEditingPedido(p)
@@ -253,6 +256,7 @@ export default function PedidosPage() {
       const { error } = await supabase.from('pedidos').update({
         cliente_id: clienteSel.id,
         fecha_entrega_solicitada: fechaEntrega,
+        hora_entrega_solicitada: horaEntrega || null,
         descuento_pct: clienteSel.descuento_pct ?? 0,
         observaciones: observaciones || null,
         subtotal: totalPedido,
@@ -477,7 +481,14 @@ export default function PedidosPage() {
                   </td>
                   <td className="font-semibold">{(p.cliente as { nombre?: string })?.nombre ?? '—'}</td>
                   <td className="text-slate-500 text-xs">{(p.vendedor as { nombre?: string })?.nombre ?? '—'}</td>
-                  <td className="font-mono text-xs text-slate-500">{format(new Date(p.fecha_entrega_solicitada), 'dd/MM/yyyy')}</td>
+                  <td className="font-mono text-xs text-slate-500">
+                    <div>{format(new Date(p.fecha_entrega_solicitada), 'dd/MM/yyyy')}</div>
+                    {(p as {hora_entrega_solicitada?:string}).hora_entrega_solicitada && (
+                      <div className="text-[10px] text-sky-500 font-semibold">
+                        🕐 {(p as {hora_entrega_solicitada?:string}).hora_entrega_solicitada?.slice(0,5)}
+                      </div>
+                    )}
+                  </td>
                   <td className="font-mono font-semibold">${Number(p.total).toFixed(2)}</td>
                   <td><OrderStatusPill status={p.estado} /></td>
                   <td className="flex gap-1.5">
@@ -517,7 +528,15 @@ export default function PedidosPage() {
           <div className="card-header">
             <div>
               <p className="font-bold text-[15px]">{selected.numero_pedido} – {(selected.cliente as { nombre?: string })?.nombre}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Vendedor: {(selected.vendedor as { nombre?: string })?.nombre} · Entrega: {format(new Date(selected.fecha_entrega_solicitada), 'dd/MM/yyyy')}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Vendedor: {(selected.vendedor as { nombre?: string })?.nombre} ·
+                Entrega: {format(new Date(selected.fecha_entrega_solicitada), 'dd/MM/yyyy')}
+                {(selected as {hora_entrega_solicitada?:string}).hora_entrega_solicitada && (
+                  <span className="text-sky-600 font-semibold ml-1">
+                    🕐 {(selected as {hora_entrega_solicitada?:string}).hora_entrega_solicitada?.slice(0,5)}
+                  </span>
+                )}
+              </p>
             </div>
             <div className="ml-auto flex gap-2">
               <button className="btn text-xs" onClick={() => exportarPdfPedido(selected)}>📄 PDF</button>
@@ -683,6 +702,9 @@ export default function PedidosPage() {
           </Field>
           <Field label="Fecha de Entrega" required>
             <input className="input" type="date" value={fechaEntrega} onChange={e => setFechaEntrega(e.target.value)} />
+          </Field>
+          <Field label="Hora de Entrega" hint="Hora acordada con el cliente">
+            <input className="input" type="time" value={horaEntrega} onChange={e => setHoraEntrega(e.target.value)} />
           </Field>
         </div>
 

@@ -44,7 +44,7 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children, title, breadcrumb, action }: AppLayoutProps) {
-  const { user, tenant, role, logout } = useAuth()
+  const { user, tenant, role, logout, modulosHabilitados } = useAuth()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const userInitials = user?.nombre ? initials(user.nombre) : '??'

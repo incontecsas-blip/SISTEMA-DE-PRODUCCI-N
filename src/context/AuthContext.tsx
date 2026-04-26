@@ -16,12 +16,13 @@ interface AuthContextValue {
   user: User | null
   tenant: Tenant | null
   role: UserRole | null
-  tenantId: string | null      // ← acceso directo sin fetch extra
-  userId: string | null        // ← acceso directo al auth user id
+  tenantId: string | null
+  userId: string | null
   loading: boolean
   isMaster: boolean
   isAdmin: boolean
   canManageUsers: boolean
+  modulosHabilitados: Record<string, boolean>  // permisos por módulo
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -32,7 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
   const [tenant, setTenant]   = useState<Tenant | null>(null)
   const [userId, setUserId]   = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]           = useState(true)
+  const [modulosHabilitados, setModulos] = useState<Record<string, boolean>>({})
   const supabase = createClient()
 
   const loadProfile = useCallback(async (authUserId: string) => {
@@ -51,6 +53,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(u as User)
+
+      // Cargar permisos por módulo
+      const { data: permisos } = await supabase
+        .from('permisos_modulos')
+        .select('modulo, habilitado')
+        .eq('user_id', uid)
+      const permisosMap: Record<string, boolean> = {}
+      for (const p of (permisos ?? [])) {
+        permisosMap[p.modulo] = p.habilitado
+      }
+      setModulos(permisosMap)
 
       const { data: t, error: tErr } = await supabase
         .from('tenants')
@@ -100,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, tenant, role, tenantId, userId,
       loading, isMaster, isAdmin, canManageUsers,
+      modulosHabilitados,
       logout, refreshUser,
     }}>
       {children}

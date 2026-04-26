@@ -20,7 +20,7 @@ interface IngredienteReq {
   unidad: string; qty_teorica: number; stock_actual: number; stock_ok: boolean
 }
 interface SolicitudDespacho {
-  pedido_id: string; numero_pedido: string; cliente: string; fecha_entrega: string; fecha_pedido: string
+  pedido_id: string; numero_pedido: string; cliente: string; fecha_entrega: string; fecha_pedido: string; hora_entrega: string
   lineas: {
     producto: string; cantidad: number; unidad: string
     precio_unitario: number; descuento_pct: number; subtotal: number
@@ -77,7 +77,7 @@ export default function BodegaPage() {
         supabase.from('productos').select('*, unidad:unidades_medida(simbolo)').eq('activo', true).order('nombre'),
         supabase.from('lotes').select('*, producto:productos(nombre,codigo,tipo)').eq('activo', true).order('fecha_vencimiento', { ascending: true }),
         supabase.from('pedidos')
-          .select(`id, numero_pedido, fecha_entrega_solicitada, created_at,
+          .select(`id, numero_pedido, fecha_entrega_solicitada, hora_entrega_solicitada, created_at,
             cliente:clientes(nombre),
             lineas:pedidos_lineas(cantidad, precio_unitario, descuento_pct, subtotal_linea,
               producto:productos(id, nombre), unidad:unidades_medida(simbolo))`)
@@ -101,7 +101,7 @@ export default function BodegaPage() {
     // Construir solicitudes con ingredientes calculados
     const sols: SolicitudDespacho[] = []
     for (const ped of (peds ?? []) as unknown as {
-      id: string; numero_pedido: string; fecha_entrega_solicitada: string; created_at: string
+      id: string; numero_pedido: string; fecha_entrega_solicitada: string; hora_entrega_solicitada: string | null; created_at: string
       cliente: { nombre?: string } | null
       lineas: { cantidad: number; precio_unitario: number; descuento_pct: number; subtotal_linea: number
         producto: { id: string; nombre: string } | null; unidad: { simbolo: string } | null }[]
@@ -139,6 +139,7 @@ export default function BodegaPage() {
       sols.push({ pedido_id: ped.id, numero_pedido: ped.numero_pedido,
         cliente: (ped.cliente as {nombre?:string}|null)?.nombre ?? '—',
         fecha_entrega: ped.fecha_entrega_solicitada,
+        hora_entrega: ped.hora_entrega_solicitada ?? '',
         fecha_pedido: ped.created_at ?? '',
         lineas: lineasConIng, todos_ok })
     }
@@ -403,6 +404,9 @@ export default function BodegaPage() {
                     <td className="font-semibold">{p.cliente}</td>
                     <td className="font-mono text-xs text-slate-500">
                       <div>{format(new Date(p.fecha_entrega), 'dd/MM/yyyy')}</div>
+                      {(p as {hora_entrega?:string}).hora_entrega && (
+                        <div className="text-[10px] text-sky-500 font-semibold">🕐 {(p as {hora_entrega?:string}).hora_entrega?.slice(0,5)}</div>
+                      )}
                     </td>
                     <td className="font-mono text-xs text-slate-500">
                       {p.estado === 'entregado' ? (
@@ -542,7 +546,7 @@ export default function BodegaPage() {
               <div>
                 <h3 className="font-bold text-[15px]">{pedidoDetalle.numero_pedido} — Detalle de Ingredientes</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Cliente: {pedidoDetalle.cliente} · Entrega: {format(new Date(pedidoDetalle.fecha_entrega), 'dd/MM/yyyy')}
+                  Cliente: {pedidoDetalle.cliente} · Entrega: {format(new Date(pedidoDetalle.fecha_entrega), 'dd/MM/yyyy')}{pedidoDetalle.hora_entrega && <span className="text-sky-500 font-semibold ml-1">🕐 {pedidoDetalle.hora_entrega.slice(0,5)}</span>}
                 </p>
               </div>
               <button onClick={() => setPedidoDetalle(null)}

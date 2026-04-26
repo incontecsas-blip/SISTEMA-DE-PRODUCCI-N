@@ -22,6 +22,18 @@ const AVATAR_COLORS: Record<UserRole, string> = {
   operario: 'from-red-400 to-red-700',
 }
 
+const TODOS_MODULOS = [
+  { key: 'dashboard',     label: 'Dashboard',      icon: '📊' },
+  { key: 'clientes',      label: 'Clientes',        icon: '🏢' },
+  { key: 'pedidos',       label: 'Pedidos',         icon: '📋' },
+  { key: 'bodega',        label: 'Bodega',          icon: '📦' },
+  { key: 'produccion',    label: 'Producción',      icon: '⚙️' },
+  { key: 'formulas',      label: 'Fórmulas',        icon: '🧪' },
+  { key: 'reportes',      label: 'Reportes',        icon: '📈' },
+  { key: 'config',        label: 'Configuración',   icon: '⚙' },
+  { key: 'admin-master',  label: 'Admin Master',    icon: '👑' },
+]
+
 export default function AdminMasterPage() {
   const { user: currentUser, isMaster, tenant: currentTenant, refreshUser } = useAuth()
   const router   = useRouter()
@@ -48,6 +60,9 @@ export default function AdminMasterPage() {
     nombre: '', email: '', rol: 'vendedor' as UserRole, password: '',
   })
 
+  // Permisos por módulo del usuario en edición
+  const [permisosUsuario, setPermisosUsuario] = useState<Record<string, boolean>>({})
+
   // Edit user form
   const [formEdit, setFormEdit] = useState({
     nombre: '', rol: 'vendedor' as UserRole, activo: true, password: '',
@@ -69,6 +84,33 @@ export default function AdminMasterPage() {
   }, [supabase, currentUser?.tenant_id])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Cargar permisos del usuario desde BD
+  async function cargarPermisos(userId: string, userRol: UserRole) {
+    // Módulos base según el rol
+    const modulosBase: Record<string, string[]> = {
+      master:   ['dashboard','clientes','pedidos','bodega','produccion','formulas','reportes','config','admin-master'],
+      admin:    ['dashboard','clientes','pedidos','bodega','produccion','formulas','reportes','config'],
+      vendedor: ['dashboard','clientes','pedidos'],
+      bodega:   ['dashboard','pedidos','bodega'],
+      operario: ['dashboard','produccion'],
+    }
+    const base = modulosBase[userRol] ?? []
+    const baseMap: Record<string, boolean> = {}
+    TODOS_MODULOS.forEach(m => { baseMap[m.key] = base.includes(m.key) })
+
+    // Leer overrides de BD
+    const { data: overrides } = await supabase
+      .from('permisos_modulos')
+      .select('modulo, habilitado')
+      .eq('user_id', userId)
+
+    const result = { ...baseMap }
+    for (const ov of (overrides ?? [])) {
+      result[ov.modulo] = ov.habilitado
+    }
+    setPermisosUsuario(result)
+  }
 
   // ── Branding ─────────────────────────────────────────────────
   async function guardarBranding() {
@@ -131,6 +173,7 @@ export default function AdminMasterPage() {
     if (u.id === currentUser?.id) { toast.error('No puedes editarte a ti mismo'); return }
     setEditingUser(u)
     setFormEdit({ nombre: u.nombre, rol: u.rol, activo: u.activo, password: '' })
+    cargarPermisos(u.id, u.rol)
     setShowEditUser(true)
   }
 
@@ -196,6 +239,29 @@ export default function AdminMasterPage() {
       toast.success(`Usuario ${u.nombre} eliminado`)
       loadData()
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Error') }
+  }
+
+  // ── Toggle módulo individual ──────────────────────────────────────
+  async function toggleModulo(moduloKey: string, habilitado: boolean) {
+    if (!editingUser) return
+    const nuevoEstado = !habilitado
+    setPermisosUsuario(prev => ({ ...prev, [moduloKey]: nuevoEstado }))
+
+    // Guardar en BD (upsert)
+    const { error } = await supabase.from('permisos_modulos').upsert({
+      user_id: editingUser.id,
+      tenant_id: currentUser?.tenant_id,
+      modulo: moduloKey,
+      habilitado: nuevoEstado,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,modulo' })
+
+    if (error) {
+      toast.error('Error al guardar permiso')
+      setPermisosUsuario(prev => ({ ...prev, [moduloKey]: habilitado })) // revert
+    } else {
+      toast.success(`${nuevoEstado ? '✅ Habilitado' : '🚫 Deshabilitado'}: ${TODOS_MODULOS.find(m=>m.key===moduloKey)?.label}`)
+    }
   }
 
   // ── Toggle activo ─────────────────────────────────────────────
@@ -462,31 +528,39 @@ export default function AdminMasterPage() {
         <InfoBox>💡 Solo cambia los campos que necesitas modificar. El email no se puede editar.</InfoBox>
         <div className="text-xs text-slate-500 mb-2">Email actual: <strong>{editingUser?.email}</strong></div>
 
-        {/* Módulos accesibles según el rol */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-          <p className="text-xs font-semibold text-slate-600 mb-2">Módulos habilitados según el rol seleccionado:</p>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { modulo: 'Dashboard',      roles: ['master','admin','vendedor','bodega','operario'] },
-              { modulo: 'Clientes',       roles: ['master','admin','vendedor'] },
-              { modulo: 'Pedidos',        roles: ['master','admin','vendedor','bodega'] },
-              { modulo: 'Bodega',         roles: ['master','admin','bodega'] },
-              { modulo: 'Producción',     roles: ['master','admin','operario','bodega'] },
-              { modulo: 'Fórmulas',       roles: ['master','admin'] },
-              { modulo: 'Reportes',       roles: ['master','admin'] },
-              { modulo: 'Configuración',  roles: ['master','admin'] },
-              { modulo: 'Admin Master',   roles: ['master'] },
-            ].map(({ modulo, roles }) => {
-              const tiene = roles.includes(formEdit.rol)
+        {/* Permisos por módulo — toggle individual */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-slate-600">Acceso por módulo</p>
+            <p className="text-[10px] text-slate-400">Los cambios se guardan inmediatamente</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {TODOS_MODULOS.filter(m => m.key !== 'admin-master').map(m => {
+              const habilitado = permisosUsuario[m.key] ?? false
               return (
-                <span key={modulo} className={clsx(
-                  'text-[10px] font-mono font-semibold px-2 py-1 rounded-lg border',
-                  tiene
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-100 text-slate-400 border-slate-200 line-through'
-                )}>
-                  {tiene ? '✓' : '✗'} {modulo}
-                </span>
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => toggleModulo(m.key, habilitado)}
+                  className={clsx(
+                    'flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all',
+                    habilitado
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-slate-100 border-slate-200 text-slate-400'
+                  )}
+                >
+                  <span className="text-base">{m.icon}</span>
+                  <span className="text-xs font-semibold flex-1">{m.label}</span>
+                  <span className={clsx(
+                    'w-8 h-4 rounded-full transition-colors flex-shrink-0 relative',
+                    habilitado ? 'bg-emerald-400' : 'bg-slate-300'
+                  )}>
+                    <span className={clsx(
+                      'absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all',
+                      habilitado ? 'left-4' : 'left-0.5'
+                    )} />
+                  </span>
+                </button>
               )
             })}
           </div>
