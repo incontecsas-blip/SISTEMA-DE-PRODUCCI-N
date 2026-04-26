@@ -369,7 +369,7 @@ export default function ProduccionPage() {
                             </div>
                             {(op.pedido as {hora_entrega_solicitada?:string}|null)?.hora_entrega_solicitada && (
                               <div className="text-[10px] text-sky-500 font-bold">
-                                🕐 {(op.pedido as {hora_entrega_solicitada:string}).hora_entrega_solicitada.slice(0,5)}
+                                🕐 {(op.pedido as unknown as {hora_entrega_solicitada:string}).hora_entrega_solicitada.slice(0,5)}
                               </div>
                             )}
                           </>
