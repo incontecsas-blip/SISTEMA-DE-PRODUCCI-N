@@ -37,7 +37,7 @@ interface PedidoEntregaOP {
 }
 interface PedidoEntrega {
   id: string; numero_pedido: string; cliente: string
-  fecha_entrega: string; estado: string
+  fecha_entrega: string; hora_entrega: string; estado: string
   lineas: PedidoEntregaLinea[]
   ops: PedidoEntregaOP[]
   todas_ops_entregadas: boolean
@@ -146,7 +146,7 @@ export default function BodegaPage() {
     setSolicitudes(sols)
 
     type PedEntRaw = {
-      id: string; numero_pedido: string; estado: string; fecha_entrega_solicitada: string
+      id: string; numero_pedido: string; estado: string; fecha_entrega_solicitada: string; hora_entrega_solicitada: string | null
       cliente: {nombre?:string}|{nombre?:string}[]|null
       lineas: {
         cantidad: number; subtotal_linea: number
@@ -201,22 +201,79 @@ export default function BodegaPage() {
       const ok = confirm('⚠ Hay ingredientes con stock insuficiente.\n\n¿Despachar de todas formas a Producción?')
       if (!ok) return
     }
-    const { error } = await supabase.from('pedidos').update({ estado: 'en_produccion' }).eq('id', sol.pedido_id)
-    if (error) { toast.error('Error: ' + error.message); return }
 
+    // 1. Cambiar estado del pedido
+    const { error: errPed } = await supabase
+      .from('pedidos').update({ estado: 'en_produccion' }).eq('id', sol.pedido_id)
+    if (errPed) { toast.error('Error al actualizar pedido: ' + errPed.message); return }
+
+    let opsCreadas = 0
+
+    // 2. Crear una OP por cada línea
     for (const linea of sol.lineas) {
-      const { data: prod } = await supabase.from('productos').select('id').eq('nombre', linea.producto).single()
-      if (!prod) continue
-      const { data: formula } = await supabase.from('formulas').select('id').eq('producto_id', prod.id).eq('activa', true).single()
-      if (!formula) continue
-      const { data: pLinea } = await supabase.from('pedidos_lineas').select('id').eq('pedido_id', sol.pedido_id).eq('producto_id', prod.id).single()
-      await supabase.from('ordenes_produccion').insert({
-        tenant_id: tenantId, pedido_id: sol.pedido_id,
-        pedido_linea_id: pLinea?.id, formula_id: formula.id,
-        estado: 'pendiente', cantidad_a_producir: linea.cantidad,
+      // Buscar producto por nombre para obtener su ID
+      const { data: prods } = await supabase
+        .from('productos')
+        .select('id')
+        .eq('nombre', linea.producto)
+        .eq('tipo', 'PT')
+        .limit(1)
+
+      const prod = prods?.[0]
+      if (!prod) {
+        console.warn('No se encontró producto PT:', linea.producto)
+        continue
+      }
+
+      // Buscar fórmula activa
+      const { data: formulas } = await supabase
+        .from('formulas')
+        .select('id')
+        .eq('producto_id', prod.id)
+        .eq('activa', true)
+        .limit(1)
+
+      const formula = formulas?.[0]
+      if (!formula) {
+        console.warn('No hay fórmula activa para:', linea.producto)
+        toast.error(`Sin fórmula activa para: ${linea.producto}`)
+        continue
+      }
+
+      // Buscar línea del pedido
+      const { data: pLineas } = await supabase
+        .from('pedidos_lineas')
+        .select('id')
+        .eq('pedido_id', sol.pedido_id)
+        .eq('producto_id', prod.id)
+        .limit(1)
+
+      const pLinea = pLineas?.[0]
+
+      // Insertar OP
+      const { error: errOP } = await supabase.from('ordenes_produccion').insert({
+        tenant_id: tenantId,
+        pedido_id: sol.pedido_id,
+        pedido_linea_id: pLinea?.id ?? null,
+        formula_id: formula.id,
+        estado: 'pendiente',
+        cantidad_a_producir: linea.cantidad,
       })
+
+      if (errOP) {
+        console.error('Error creando OP:', errOP)
+        toast.error(`Error al crear OP para ${linea.producto}: ${errOP.message}`)
+      } else {
+        opsCreadas++
+      }
     }
-    toast.success(`Pedido ${sol.numero_pedido} despachado a Producción ✅`)
+
+    if (opsCreadas > 0) {
+      toast.success(`✅ Pedido ${sol.numero_pedido} despachado · ${opsCreadas} OP${opsCreadas > 1 ? 's' : ''} creadas en Producción`)
+    } else {
+      toast.error('⚠ Pedido actualizado pero no se crearon OPs. Verifica que los productos tengan fórmula activa.')
+    }
+
     setPedidoDetalle(null)
     loadData()
   }
@@ -329,7 +386,12 @@ export default function BodegaPage() {
                           <span key={i} className="block text-xs text-slate-600">{l.cantidad} {l.unidad} {l.producto}</span>
                         ))}
                       </td>
-                      <td className="font-mono text-xs text-slate-500">{format(new Date(s.fecha_entrega), 'dd/MM/yy')}</td>
+                      <td className="font-mono text-xs text-slate-500">
+                        <div className="font-semibold">{format(new Date(s.fecha_entrega), 'dd/MM/yyyy')}</div>
+                        {s.hora_entrega && (
+                          <div className="text-[10px] text-sky-500 font-bold">🕐 {s.hora_entrega.slice(0,5)}</div>
+                        )}
+                      </td>
                       <td>
                         {s.todos_ok
                           ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ OK</span>
@@ -403,9 +465,9 @@ export default function BodegaPage() {
                     <td className="font-mono font-bold text-sky-600">{p.numero_pedido}</td>
                     <td className="font-semibold">{p.cliente}</td>
                     <td className="font-mono text-xs text-slate-500">
-                      <div>{format(new Date(p.fecha_entrega), 'dd/MM/yyyy')}</div>
-                      {(p as {hora_entrega?:string}).hora_entrega && (
-                        <div className="text-[10px] text-sky-500 font-semibold">🕐 {(p as {hora_entrega?:string}).hora_entrega?.slice(0,5)}</div>
+                      <div className="font-semibold">{format(new Date(p.fecha_entrega), 'dd/MM/yyyy')}</div>
+                      {p.hora_entrega && (
+                        <div className="text-[10px] text-sky-500 font-bold">🕐 {p.hora_entrega.slice(0,5)}</div>
                       )}
                     </td>
                     <td className="font-mono text-xs text-slate-500">

@@ -60,7 +60,7 @@ export default function ProduccionPage() {
   const fetchOPs = useCallback(async () => {
     let q = supabase
       .from('ordenes_produccion')
-      .select('*, pedido:pedidos(numero_pedido,fecha_entrega_solicitada,created_at), responsable:users(nombre), formula:formulas(version, producto:productos(nombre))')
+      .select('*, pedido:pedidos(numero_pedido,fecha_entrega_solicitada,hora_entrega_solicitada,created_at), responsable:users(nombre), formula:formulas(version, producto:productos(nombre))')
       .order('created_at', { ascending: false })
 
     if (role === 'operario') q = q.eq('responsable_id', user?.id ?? '')
@@ -362,9 +362,18 @@ export default function ProduccionPage() {
                         ) : '—'}
                       </td>
                       <td className="font-mono text-xs text-slate-500">
-                        {(op.pedido as {fecha_entrega_solicitada?:string}|null)?.fecha_entrega_solicitada
-                          ? format(new Date((op.pedido as {fecha_entrega_solicitada:string}).fecha_entrega_solicitada), 'dd/MM/yy')
-                          : '—'}
+                        {(op.pedido as {fecha_entrega_solicitada?:string}|null)?.fecha_entrega_solicitada ? (
+                          <>
+                            <div className="font-semibold">
+                              {format(new Date((op.pedido as {fecha_entrega_solicitada:string}).fecha_entrega_solicitada), 'dd/MM/yyyy')}
+                            </div>
+                            {(op.pedido as {hora_entrega_solicitada?:string}|null)?.hora_entrega_solicitada && (
+                              <div className="text-[10px] text-sky-500 font-bold">
+                                🕐 {(op.pedido as {hora_entrega_solicitada:string}).hora_entrega_solicitada.slice(0,5)}
+                              </div>
+                            )}
+                          </>
+                        ) : '—'}
                       </td>
                       <td className="font-mono text-xs text-slate-500">
                         {op.estado === 'entregada_bodega' && op.fecha_fin ? (
