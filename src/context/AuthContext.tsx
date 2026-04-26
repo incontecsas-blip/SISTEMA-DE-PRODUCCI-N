@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: permisos } = await supabase
         .from('permisos_modulos')
         .select('modulo, habilitado')
-        .eq('user_id', uid)
+        .eq('user_id', authUserId)
       const permisosMap: Record<string, boolean> = {}
       for (const p of (permisos ?? [])) {
         permisosMap[p.modulo] = p.habilitado
