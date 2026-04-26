@@ -30,7 +30,7 @@ const FORM_DEFAULT = {
 }
 
 export default function ClientesPage() {
-  const { user } = useAuth()
+  const { user, tenantId, userId } = useAuth()
   const supabase  = createClient()
 
   const [clientes, setClientes]     = useState<Cliente[]>([])
